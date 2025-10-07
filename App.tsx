@@ -1722,14 +1722,20 @@ const ReminderItem: React.FC<{
             <div className="flex items-center flex-1 min-w-0">
                 <button onClick={onToggleComplete} className="mr-4 text-gray-400 hover:text-green-500 flex-shrink-0"><CheckCircleIcon className="w-6 h-6"/></button>
                 <div className="flex-1 min-w-0">
-                    <p 
-                        className={`font-semibold text-gray-800 truncate ${customer && onCustomerClick ? 'cursor-pointer hover:underline' : ''}`}
-                        onClick={handleCustomerClick}
+                    <p
+                        className="font-semibold text-gray-800 truncate"
                         title={reminder.title}
                     >
                         {reminder.title}
                     </p>
-                    {customer && <p className="text-sm text-indigo-600 truncate">{customer.name}</p>}
+                    {customer && (
+                        <p
+                            className="text-sm text-indigo-600 truncate cursor-pointer hover:underline"
+                            onClick={handleCustomerClick}
+                        >
+                            {customer.name}
+                        </p>
+                    )}
                     <p className="text-sm text-gray-500">{formatDate(reminder.dueDate)}</p>
                 </div>
             </div>
