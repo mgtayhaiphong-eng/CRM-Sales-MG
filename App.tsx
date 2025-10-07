@@ -552,7 +552,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ isOpen, onClose, onSave, cu
                     </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700">Phân loại</label>
-                         <select value={formData.tier} onChange={(e) => handleChange('tier', e.target.value)} className="w-full p-2 border rounded-lg border-gray-300">
+                         <select value={formData.tier} onChange={(e) => handleChange('tier', e.target.value as Customer['tier'])} className="w-full p-2 border rounded-lg border-gray-300">
                               {CUSTOMER_TIERS.map(tier => <option key={tier.value} value={tier.value}>{tier.label}</option>)}
                          </select>
                     </div>
@@ -1028,13 +1028,43 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
 }
 
 const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerEdit: (c: Customer) => void, onCustomerDelete: (id: string) => void, onGenerateScript: (c: Customer) => void, users: User[], currentUser: User}> = ({customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, users, currentUser}) => {
-    const [sortField, setSortField] = useState<keyof Customer>('lastContactDate');
+    const [sortField, setSortField] = useState<keyof Customer | 'userId'>('lastContactDate');
     const [sortDirection, setSortDirection] = useState('desc');
+
+    const allPossibleColumns = useMemo(() => [
+        { key: 'name', label: 'Khách hàng' },
+        { key: 'phone', label: 'Liên hệ' },
+        { key: 'carModel', label: 'Dòng xe' },
+        { key: 'source', label: 'Nguồn' },
+        { key: 'statusId', label: 'Trạng thái' },
+        { key: 'tier', label: 'Phân loại' },
+        { key: 'salesValue', label: 'Giá trị' },
+        ...(currentUser.role === 'admin' ? [{ key: 'userId', label: 'Nhân viên' }] : []),
+        { key: 'lastContactDate', label: 'L.Hệ cuối' },
+        { key: 'createdDate', label: 'Ngày tạo' },
+    ], [currentUser.role]);
+
+    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
+        new Set(['name', 'phone', 'statusId', 'salesValue', 'lastContactDate', ...(currentUser.role === 'admin' ? ['userId'] : [])])
+    );
+    
+    const [showColumnSelector, setShowColumnSelector] = useState(false);
+    const columnSelectorRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target as Node)) {
+                setShowColumnSelector(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const sortedCustomers = useMemo(() => {
         return [...customers].sort((a, b) => {
-            const aVal = a[sortField];
-            const bVal = b[sortField];
+            const aVal = a[sortField as keyof Customer];
+            const bVal = b[sortField as keyof Customer];
             if(aVal === bVal) return 0;
             
             const direction = sortDirection === 'asc' ? 1 : -1;
@@ -1049,7 +1079,7 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
         });
     }, [customers, sortField, sortDirection]);
 
-    const handleSort = (field: keyof Customer) => {
+    const handleSort = (field: keyof Customer | 'userId') => {
         if (field === sortField) {
             setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
         } else {
@@ -1057,29 +1087,100 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
             setSortDirection('desc');
         }
     };
+    
+    const handleColumnToggle = (columnKey: string) => {
+        setVisibleColumns(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(columnKey)) {
+                if (newSet.size > 1) { 
+                    newSet.delete(columnKey);
+                }
+            } else {
+                newSet.add(columnKey);
+            }
+            return newSet;
+        });
+    };
 
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
     
-    const headers = [
-        { key: 'name', label: 'Khách hàng' },
-        { key: 'phone', label: 'Liên hệ' },
-        { key: 'statusId', label: 'Trạng thái' },
-        { key: 'salesValue', label: 'Giá trị' },
-        ...(currentUser.role === 'admin' ? [{ key: 'userId', label: 'Nhân viên' }] : []),
-        { key: 'lastContactDate', label: 'L.Hệ cuối' },
-    ];
+    const renderCellContent = (customer: Customer, columnKey: string) => {
+        switch (columnKey) {
+            case 'name':
+                return (
+                    <>
+                        <div className="font-medium text-gray-900">{customer.name}</div>
+                        <div className="text-sm text-gray-500">{customer.carModel || 'Chưa rõ xe'}</div>
+                    </>
+                );
+            case 'phone':
+                return (
+                    <>
+                        <div className="text-sm text-gray-900">{customer.phone}</div>
+                        <div className="text-sm text-gray-500 truncate max-w-[150px]">{customer.email}</div>
+                    </>
+                );
+            case 'statusId':
+                const status = statuses.find(s => s.id === customer.statusId);
+                return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status?.color} text-white`}>{status?.name || '---'}</span>;
+            case 'salesValue':
+                return <span className="text-sm text-green-600 font-semibold">{formatCurrency(customer.salesValue)}</span>;
+            case 'userId':
+                 return <span className="text-sm text-gray-500">{getUserName(customer.userId)}</span>;
+            case 'lastContactDate':
+                return <span className="text-sm text-gray-500">{formatDate(customer.lastContactDate)}</span>;
+            case 'createdDate':
+                return <span className="text-sm text-gray-500">{formatDate(customer.createdDate)}</span>;
+            case 'carModel':
+                return <span className="text-sm text-gray-500">{customer.carModel || '---'}</span>;
+            case 'source':
+                return <span className="text-sm text-gray-500">{customer.source || '---'}</span>;
+            case 'tier':
+                const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
+                return <span className={`text-sm font-semibold ${tierConfig?.color}`}>{tierConfig?.value}</span>;
+            default:
+                return null;
+        }
+    };
+    
+    const columnsToRender = allPossibleColumns.filter(col => visibleColumns.has(col.key));
 
     return (
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+             <div className="p-4 border-b flex justify-end">
+                <div className="relative" ref={columnSelectorRef}>
+                    <button onClick={() => setShowColumnSelector(prev => !prev)} className="px-3 py-1.5 border rounded-lg text-sm flex items-center text-gray-600 hover:bg-gray-100">
+                        <SettingsIcon className="w-4 h-4 mr-2"/> Tùy chỉnh cột
+                    </button>
+                    {showColumnSelector && (
+                        <div className="absolute top-full right-0 mt-2 w-56 bg-white border rounded-lg shadow-xl z-10 p-2">
+                            <p className="text-xs text-gray-500 px-2 pb-2 border-b">Chọn cột để hiển thị</p>
+                            <div className="mt-2 space-y-1">
+                                {allPossibleColumns.map(col => (
+                                    <label key={col.key} className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            checked={visibleColumns.has(col.key)}
+                                            onChange={() => handleColumnToggle(col.key)}
+                                        />
+                                        <span className="text-sm text-gray-700">{col.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            {headers.map(h => (
-                                <th key={h.key} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort(h.key as keyof Customer)}>
+                            {columnsToRender.map(col => (
+                                <th key={col.key} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort(col.key as keyof Customer | 'userId')}>
                                     <div className="flex items-center">
-                                        {h.label}
-                                        {sortField === h.key && <span className="ml-1">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
+                                        {col.label}
+                                        {sortField === col.key && <span className="ml-1">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
                                     </div>
                                 </th>
                             ))}
@@ -1087,24 +1188,13 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {sortedCustomers.map(customer => {
-                            const status = statuses.find(s => s.id === customer.statusId);
-                            return (
+                        {sortedCustomers.length > 0 && sortedCustomers.map(customer => (
                             <tr key={customer.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="font-medium text-gray-900">{customer.name}</div>
-                                    <div className="text-sm text-gray-500">{customer.carModel || 'Chưa rõ xe'}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                     <div className="text-sm text-gray-900">{customer.phone}</div>
-                                     <div className="text-sm text-gray-500">{customer.email}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status?.color} text-white`}>{status?.name || '---'}</span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">{formatCurrency(customer.salesValue)}</td>
-                                {currentUser.role === 'admin' && <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getUserName(customer.userId)}</td>}
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(customer.lastContactDate)}</td>
+                                {columnsToRender.map(col => (
+                                    <td key={col.key} className="px-6 py-4 whitespace-nowrap">
+                                        {renderCellContent(customer, col.key)}
+                                    </td>
+                                ))}
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div className="flex items-center justify-end space-x-3">
                                         <button onClick={() => onGenerateScript(customer)} className="text-indigo-600 hover:text-indigo-900" title="Tạo kịch bản AI"><SparklesIcon className="w-5 h-5"/></button>
@@ -1114,9 +1204,12 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
                                 </td>
                             </tr>
                             )
-                        })}
+                        )}
                     </tbody>
                 </table>
+                {sortedCustomers.length === 0 && (
+                     <div className="text-center p-8 text-gray-500">Không tìm thấy khách hàng nào.</div>
+                )}
             </div>
         </div>
     )
