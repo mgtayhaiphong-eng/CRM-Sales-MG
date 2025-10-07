@@ -1477,13 +1477,21 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         if (!formData.name.trim()) newErrors.name = "Tên không được để trống";
         if (!formData.username.trim()) {
             newErrors.username = "Username không được để trống";
-        } else if (allUsers.some(u => u.username === formData.username && u.id !== user?.id)) {
+        } else if (allUsers.some(u => u.username.toLowerCase() === formData.username.toLowerCase() && u.id !== user?.id)) {
             newErrors.username = "Username đã tồn tại";
         }
 
-        if (!user || formData.password) { // Password is required for new users, or if it's being changed
-            if (!formData.password) newErrors.password = "Mật khẩu không được để trống";
-            if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = "Mật khẩu không khớp";
+        // Password is required for new users.
+        // For existing users, password fields are only validated if a new password is entered.
+        if (!user || formData.password || formData.confirmPassword) {
+            if (!formData.password) {
+                newErrors.password = "Mật khẩu không được để trống";
+            } else if (formData.password.length < 4) {
+                newErrors.password = "Mật khẩu phải có ít nhất 4 ký tự.";
+            }
+            if (formData.password !== formData.confirmPassword) {
+                newErrors.confirmPassword = "Mật khẩu xác nhận không khớp";
+            }
         }
         
         setErrors(newErrors);
@@ -1494,18 +1502,17 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         e.preventDefault();
         if (!validate()) return;
         
-        const userData: Omit<User, 'id' | 'role'> = {
+        // Prepare the data to be saved.
+        const userToSave: Omit<User, 'id' | 'role'> = {
             name: formData.name,
             username: formData.username,
+            // If a new password is provided, use it.
+            // Otherwise, for an existing user, keep their current password.
+            // For a new user, the password from the form is used (validation ensures it's not empty).
+            password: formData.password ? formData.password : user?.password,
         };
-
-        if (formData.password) {
-            userData.password = formData.password;
-        } else if (user) {
-            userData.password = user.password; // Keep old password if not changed
-        }
         
-        onSave(userData);
+        onSave(userToSave);
         onClose();
     };
 
@@ -1690,23 +1697,43 @@ const RemindersView: React.FC<{ reminders: Reminder[], customers: Customer[], on
     );
 };
 
-const ReminderItem: React.FC<{ reminder: Reminder, customer?: Customer, onEdit: ()=>void, onToggleComplete: ()=>void, onDelete: ()=>void }> = ({ reminder, customer, onEdit, onToggleComplete, onDelete }) => {
+const ReminderItem: React.FC<{ 
+    reminder: Reminder, 
+    customer?: Customer, 
+    onEdit: ()=>void, 
+    onToggleComplete: ()=>void, 
+    onDelete: ()=>void,
+    onCustomerClick?: (customer: Customer) => void 
+}> = ({ reminder, customer, onEdit, onToggleComplete, onDelete, onCustomerClick }) => {
     const priorityClasses: Record<Reminder['priority'], string> = {
         high: 'border-red-500',
         medium: 'border-yellow-500',
         low: 'border-gray-300'
     };
+    
+    const handleCustomerClick = () => {
+        if (customer && onCustomerClick) {
+            onCustomerClick(customer);
+        }
+    };
+
     return (
-        <div className={`p-4 bg-white rounded-lg border-l-4 ${priorityClasses[reminder.priority]} shadow-sm flex items-center justify-between`}>
-            <div className="flex items-center">
-                <button onClick={onToggleComplete} className="mr-4 text-gray-400 hover:text-green-500"><CheckCircleIcon className="w-6 h-6"/></button>
-                <div>
-                    <p className="font-semibold text-gray-800">{reminder.title}</p>
-                    {customer && <p className="text-sm text-indigo-600">{customer.name}</p>}
+        <div className={`p-4 bg-white rounded-lg border-l-4 ${priorityClasses[reminder.priority]} shadow-sm flex items-center justify-between transition-all hover:shadow-md`}>
+            <div className="flex items-center flex-1 min-w-0">
+                <button onClick={onToggleComplete} className="mr-4 text-gray-400 hover:text-green-500 flex-shrink-0"><CheckCircleIcon className="w-6 h-6"/></button>
+                <div className="flex-1 min-w-0">
+                    <p 
+                        className={`font-semibold text-gray-800 truncate ${customer && onCustomerClick ? 'cursor-pointer hover:underline' : ''}`}
+                        onClick={handleCustomerClick}
+                        title={reminder.title}
+                    >
+                        {reminder.title}
+                    </p>
+                    {customer && <p className="text-sm text-indigo-600 truncate">{customer.name}</p>}
                     <p className="text-sm text-gray-500">{formatDate(reminder.dueDate)}</p>
                 </div>
             </div>
-             <div className="flex items-center space-x-2">
+             <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
                 <button onClick={onEdit} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full" title="Sửa"><Edit2Icon className="w-4 h-4"/></button>
                 <button onClick={onDelete} className="p-2 text-red-500 hover:bg-red-100 rounded-full" title="Xóa"><Trash2Icon className="w-4 h-4"/></button>
             </div>
@@ -1722,11 +1749,19 @@ const UpcomingRemindersWidget: React.FC<{reminders: Reminder[], customers: Custo
     return (
         <div>
             <h3 className="text-lg font-semibold mb-4">Nhắc hẹn Sắp tới</h3>
-            {upcoming.length === 0 ? <p className="text-gray-500">Không có nhắc hẹn nào.</p> : (
+            {upcoming.length === 0 ? <p className="text-gray-500 py-8 text-center">Không có nhắc hẹn nào.</p> : (
                 <div className="space-y-3">
                     {upcoming.map(rem => {
                         const customer = customers.find(c => c.id === rem.customerId);
-                        return <ReminderItem key={rem.id} reminder={rem} customer={customer} onEdit={() => onEditReminder(rem)} onToggleComplete={() => onToggleComplete(rem.id)} onDelete={() => onDeleteReminder(rem.id)} />
+                        return <ReminderItem 
+                            key={rem.id} 
+                            reminder={rem} 
+                            customer={customer} 
+                            onEdit={() => onEditReminder(rem)} 
+                            onToggleComplete={() => onToggleComplete(rem.id)} 
+                            onDelete={() => onDeleteReminder(rem.id)}
+                            onCustomerClick={onOpenCustomer}
+                        />
                     })}
                 </div>
             )}
