@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import type { User, Customer, Status, CarModel, CustomerSource, Interaction, Reminder, CrmData } from './types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from './constants';
@@ -1030,6 +1031,7 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
 const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerEdit: (c: Customer) => void, onCustomerDelete: (id: string) => void, onGenerateScript: (c: Customer) => void, users: User[], currentUser: User}> = ({customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, users, currentUser}) => {
     const [sortField, setSortField] = useState<keyof Customer | 'userId'>('lastContactDate');
     const [sortDirection, setSortDirection] = useState('desc');
+    const [selectedUserId, setSelectedUserId] = useState('all');
 
     const allPossibleColumns = useMemo(() => [
         { key: 'name', label: 'Khách hàng' },
@@ -1061,8 +1063,13 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const sortedCustomers = useMemo(() => {
-        return [...customers].sort((a, b) => {
+    const processedCustomers = useMemo(() => {
+        let filtered = [...customers];
+        if (currentUser.role === 'admin' && selectedUserId !== 'all') {
+            filtered = filtered.filter(customer => customer.userId === selectedUserId);
+        }
+
+        return filtered.sort((a, b) => {
             const aVal = a[sortField as keyof Customer];
             const bVal = b[sortField as keyof Customer];
             if(aVal === bVal) return 0;
@@ -1077,7 +1084,7 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
             }
             return (aVal > bVal ? 1 : -1) * direction;
         });
-    }, [customers, sortField, sortDirection]);
+    }, [customers, sortField, sortDirection, currentUser.role, selectedUserId]);
 
     const handleSort = (field: keyof Customer | 'userId') => {
         if (field === sortField) {
@@ -1147,7 +1154,27 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
 
     return (
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-             <div className="p-4 border-b flex justify-end">
+             <div className="p-4 border-b flex justify-between items-center space-x-4">
+                <div className="flex-1">
+                    {currentUser.role === 'admin' && (
+                        <div className="max-w-xs">
+                             <label htmlFor="user-filter" className="block text-sm font-medium text-gray-700">
+                                Nhân viên
+                            </label>
+                            <select
+                                id="user-filter"
+                                value={selectedUserId}
+                                onChange={(e) => setSelectedUserId(e.target.value)}
+                                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                            >
+                                <option value="all">Tất cả nhân viên</option>
+                                {users.map(user => (
+                                    <option key={user.id} value={user.id}>{user.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
                 <div className="relative" ref={columnSelectorRef}>
                     <button onClick={() => setShowColumnSelector(prev => !prev)} className="px-3 py-1.5 border rounded-lg text-sm flex items-center text-gray-600 hover:bg-gray-100">
                         <SettingsIcon className="w-4 h-4 mr-2"/> Tùy chỉnh cột
@@ -1188,7 +1215,7 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {sortedCustomers.length > 0 && sortedCustomers.map(customer => (
+                        {processedCustomers.length > 0 && processedCustomers.map(customer => (
                             <tr key={customer.id} className="hover:bg-gray-50">
                                 {columnsToRender.map(col => (
                                     <td key={col.key} className="px-6 py-4 whitespace-nowrap">
@@ -1207,7 +1234,7 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
                         )}
                     </tbody>
                 </table>
-                {sortedCustomers.length === 0 && (
+                {processedCustomers.length === 0 && (
                      <div className="text-center p-8 text-gray-500">Không tìm thấy khách hàng nào.</div>
                 )}
             </div>
