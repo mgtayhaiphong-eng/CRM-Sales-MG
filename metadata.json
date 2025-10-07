@@ -1,0 +1,5 @@
+{
+  "name": "CRM Sales MG - Gemini AI Edition",
+  "description": "A comprehensive CRM application for managing sales pipelines, customer interactions, and sales goals, enhanced with Gemini AI for generating customer care scripts. Features role-based access for admins and sales users.",
+  "requestFramePermissions": []
+}

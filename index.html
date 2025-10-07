@@ -1,0 +1,39 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Sales MG - Gemini AI Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #4f46e5; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
+        .drag-over { background-color: #e0e7ff !important; border: 2px dashed #6366f1 !important; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+        @keyframes fade-in-right { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        .animate-fade-in-right { animation: fade-in-right 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+    <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.run/@google/genai",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "chart.js": "https://aistudiocdn.com/chart.js@^4.5.0"
+  }
+}
+</script>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
