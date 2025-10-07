@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import type { User, Customer, Status, CarModel, CustomerSource, Interaction, Reminder, CrmData } from './types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from './constants';
@@ -655,6 +654,7 @@ const MainLayout: React.FC = () => {
     const [dataByUser, setDataByUser] = useState<Record<string, CrmData>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedUserId, setSelectedUserId] = useState('all');
     
     // Modals state
     const [showCustomerForm, setShowCustomerForm] = useState(false);
@@ -671,11 +671,20 @@ const MainLayout: React.FC = () => {
     const allCustomers = useMemo(() => user.role === 'admin' ? Object.values(dataByUser).flatMap(d => d.customers) : currentUserData.customers, [user.role, dataByUser, currentUserData]);
     const allReminders = useMemo(() => user.role === 'admin' ? Object.values(dataByUser).flatMap(d => d.reminders) : currentUserData.reminders, [user.role, dataByUser, currentUserData]);
     
-    const filteredCustomers = useMemo(() => {
+    // Centralized filtering logic
+    const customersForKanban = useMemo(() => {
         if (!searchTerm.trim()) return allCustomers;
         const term = searchTerm.toLowerCase();
         return allCustomers.filter(c => c.name.toLowerCase().includes(term) || c.phone.includes(term));
     }, [allCustomers, searchTerm]);
+    
+    const customersForListView = useMemo(() => {
+        let filtered = [...customersForKanban];
+        if (user.role === 'admin' && selectedUserId !== 'all') {
+            filtered = filtered.filter(customer => customer.userId === selectedUserId);
+        }
+        return filtered;
+    }, [customersForKanban, user.role, selectedUserId]);
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
@@ -938,8 +947,8 @@ const MainLayout: React.FC = () => {
                 <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                    {activeView === 'dashboard' && <Dashboard customers={allCustomers} statuses={currentSettingsData.statuses} reminders={allReminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={handleToggleReminderComplete} onDeleteReminder={handleDeleteReminder} onOpenCustomer={openEditCustomer} />}
                    {activeView === 'reminders' && <RemindersView reminders={allReminders} customers={allCustomers} onOpenReminderModal={openReminderModal} onToggleComplete={handleToggleReminderComplete} onDelete={handleDeleteReminder} />}
-                   {activeView === 'kanban' && <KanbanView customers={filteredCustomers} statuses={currentSettingsData.statuses} reminders={allReminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} />}
-                   {activeView === 'list' && <ListView customers={filteredCustomers} statuses={currentSettingsData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} />}
+                   {activeView === 'kanban' && <KanbanView customers={customersForKanban} statuses={currentSettingsData.statuses} reminders={allReminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} />}
+                   {activeView === 'list' && <ListView customers={customersForListView} statuses={currentSettingsData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId}/>}
                    {activeView === 'reports' && user.role === 'admin' && <ReportsView customers={allCustomers} users={users} statuses={currentSettingsData.statuses} carModels={currentSettingsData.carModels} customerSources={currentSettingsData.customerSources} />}
                    {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} carModels={currentSettingsData.carModels} customerSources={currentSettingsData.customerSources} onUsersUpdate={handleUsersUpdate} onSettingsUpdate={handleSettingsUpdate} onDataReset={StorageService.resetData} />}
                 </main>
@@ -1028,11 +1037,21 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
     );
 }
 
-const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerEdit: (c: Customer) => void, onCustomerDelete: (id: string) => void, onGenerateScript: (c: Customer) => void, users: User[], currentUser: User}> = ({customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, users, currentUser}) => {
+interface ListViewProps {
+    customers: Customer[];
+    statuses: Status[];
+    onCustomerEdit: (c: Customer) => void;
+    onCustomerDelete: (id: string) => void;
+    onGenerateScript: (c: Customer) => void;
+    users: User[];
+    currentUser: User;
+    selectedUserId: string;
+    onSelectedUserChange: (userId: string) => void;
+}
+const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, users, currentUser, selectedUserId, onSelectedUserChange}) => {
     const [sortField, setSortField] = useState<keyof Customer | 'userId'>('lastContactDate');
     const [sortDirection, setSortDirection] = useState('desc');
-    const [selectedUserId, setSelectedUserId] = useState('all');
-
+    
     const allPossibleColumns = useMemo(() => [
         { key: 'name', label: 'Khách hàng' },
         { key: 'phone', label: 'Liên hệ' },
@@ -1064,12 +1083,8 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
     }, []);
 
     const processedCustomers = useMemo(() => {
-        let filtered = [...customers];
-        if (currentUser.role === 'admin' && selectedUserId !== 'all') {
-            filtered = filtered.filter(customer => customer.userId === selectedUserId);
-        }
-
-        return filtered.sort((a, b) => {
+        let sorted = [...customers];
+        return sorted.sort((a, b) => {
             const aVal = a[sortField as keyof Customer];
             const bVal = b[sortField as keyof Customer];
             if(aVal === bVal) return 0;
@@ -1084,7 +1099,7 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
             }
             return (aVal > bVal ? 1 : -1) * direction;
         });
-    }, [customers, sortField, sortDirection, currentUser.role, selectedUserId]);
+    }, [customers, sortField, sortDirection]);
 
     const handleSort = (field: keyof Customer | 'userId') => {
         if (field === sortField) {
@@ -1164,7 +1179,7 @@ const ListView: React.FC<{customers: Customer[], statuses: Status[], onCustomerE
                             <select
                                 id="user-filter"
                                 value={selectedUserId}
-                                onChange={(e) => setSelectedUserId(e.target.value)}
+                                onChange={(e) => onSelectedUserChange(e.target.value)}
                                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                             >
                                 <option value="all">Tất cả nhân viên</option>
