@@ -1,27 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
-// FIX: Import `Role` and other types from `types.ts` to break circular dependency.
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData } from './types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from './constants';
 import { GeminiService } from './services/geminiService';
 import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement } from 'chart.js';
 
-// FIX: Role enum has been moved to types.ts to break the circular dependency.
+// Firebase Imports
+import { auth, db } from './services/firebase';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, type User as FirebaseUser } from 'firebase/auth';
+import { collection, doc, onSnapshot, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc, writeBatch, query, where, documentId } from 'firebase/firestore';
+
 
 // Register Chart.js components
 Chart.register(DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement);
 
 
-// START: MOCK DATA AND SERVICES
-// This section simulates a backend for authentication and data storage.
-// It uses localStorage for persistence across page reloads.
-
-const MOCK_USERS: User[] = [
-    { id: 'admin01', username: 'admin', password: 'admin', role: Role.ADMIN, name: 'Admin Manager' },
-    { id: 'user01', username: 'user', password: 'user', role: Role.USER, name: 'Nguyễn Văn A' },
-    { id: 'user02', username: 'user2', password: 'user2', role: Role.USER, name: 'Phạm Thị C' },
+// START: MOCK DATA FOR SEEDING
+const MOCK_USERS_SEED: Omit<User, 'id'>[] = [
+    { username: 'admin', password: 'admin', role: Role.ADMIN, name: 'Admin Manager' },
+    { username: 'user', password: 'user', role: Role.USER, name: 'Nguyễn Văn A' },
+    { username: 'user2', password: 'user2', role: Role.USER, name: 'Phạm Thị C' },
 ];
 
-const generateMockData = (userId: string): CrmData => ({
+const MOCK_INITIAL_DATA: Omit<CrmData, 'customers' | 'reminders' | 'salesGoals'> = {
     statuses: [
         { id: 'status1', name: '1. Khách hàng Mới', color: 'bg-indigo-400', order: 1, type: 'pipeline' },
         { id: 'status2', name: '2. Đã Chăm sóc', color: 'bg-yellow-500', order: 2, type: 'pipeline' },
@@ -36,34 +36,8 @@ const generateMockData = (userId: string): CrmData => ({
     customerSources: [
         { id: 'source1', name: 'Facebook' }, { id: 'source2', name: 'Website' }, { id: 'source3', name: 'Showroom' }, { id: 'source4', name: 'Giới thiệu' }, { id: 'source5', name: 'Zalo' }
     ],
-    customers: [
-        { id: 'cust_1', name: 'Trần Thị B', phone: '0987654321', email: 'b.tran@example.com', carModel: 'MG ZS', source: 'Facebook', statusId: 'status1', city: 'Hà Nội', salesValue: 550000000, tier: 'COLD', createdDate: Date.now() - 86400000 * 5, lastContactDate: Date.now() - 86400000 * 2, interactions: [], userId: userId },
-        { id: 'cust_2', name: 'Lê Văn C', phone: '0912345678', email: 'c.le@example.com', carModel: 'MG HS', source: 'Showroom', statusId: 'status3', city: 'TP Hồ Chí Minh', salesValue: 720000000, tier: 'HOT', createdDate: Date.now() - 86400000 * 10, lastContactDate: Date.now() - 86400000 * 1, interactions: [], userId: userId },
-    ],
-    reminders: [
-        { id: 'rem_1', customerId: 'cust_1', userId: userId, title: 'Gọi lại xác nhận lái thử', description: 'Khách hàng hẹn gọi lại sau 2 ngày', dueDate: Date.now() + 86400000, completed: false, priority: 'high' }
-    ],
-    salesGoals: [],
-});
-
-const StorageService = {
-    getAllData: async (): Promise<{ users: User[], dataByUser: Record<string, CrmData> } | null> => {
-        const stored = localStorage.getItem('crmMultiUser');
-        return stored ? JSON.parse(stored) : null;
-    },
-    saveAllData: async (data: { users: User[], dataByUser: Record<string, CrmData> }): Promise<void> => {
-        localStorage.setItem('crmMultiUser', JSON.stringify(data));
-    },
-    resetData: async (): Promise<void> => {
-        if (confirm('BẠN CÓ CHẮC CHẮN MUỐN XÓA TOÀN BỘ DỮ LIỆU? Thao tác này không thể hoàn tác.')) {
-            localStorage.removeItem('crmMultiUser');
-            alert('Đã xóa dữ liệu. Vui lòng tải lại trang.');
-            window.location.reload();
-        }
-    }
 };
-
-// END: MOCK DATA AND SERVICES
+// END: MOCK DATA FOR SEEDING
 
 
 // START: HELPER FUNCTIONS & AUTH CONTEXT
@@ -78,7 +52,7 @@ const formatDateTime = (timestamp?: number) => timestamp ? new Date(timestamp).t
 
 interface AuthContextType {
     currentUser: User | null;
-    login: (username: string, password: string) => boolean;
+    login: (username: string, password: string) => Promise<boolean>;
     logout: () => void;
 }
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -89,38 +63,50 @@ const useAuth = () => {
 };
 
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [currentUser, setCurrentUser] = useState<User | null>(() => {
-        const stored = localStorage.getItem('crmCurrentUser');
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
+                const userDocRef = doc(db, "users", firebaseUser.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    setCurrentUser({ id: userDoc.id, ...userDoc.data() } as User);
+                } else {
+                    // This case might happen if user doc creation failed or was deleted.
+                    // For robustness, you could try to recreate it or sign the user out.
+                    console.error("User document not found in Firestore for UID:", firebaseUser.uid);
+                    setCurrentUser(null);
+                }
+            } else {
+                setCurrentUser(null);
+            }
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const login = async (username: string, password: string): Promise<boolean> => {
         try {
-            return stored ? JSON.parse(stored) : null;
-        } catch {
-            return null;
-        }
-    });
-
-    const login = (username: string, password: string): boolean => {
-        const stored = localStorage.getItem('crmMultiUser');
-        // Fallback to MOCK_USERS if local storage is empty
-        const allData = stored ? JSON.parse(stored) : { users: MOCK_USERS };
-        const usersList: User[] = allData.users;
-        
-        const user = usersList.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
-        
-        if (user) {
-            // Create a user object without the password to store in state and localStorage
-            const { password: _, ...userToStore } = user;
-            setCurrentUser(userToStore);
-            localStorage.setItem('crmCurrentUser', JSON.stringify(userToStore));
+            // Firebase Auth uses email for login. We'll map username to a dummy email.
+            await signInWithEmailAndPassword(auth, `${username.toLowerCase()}@crm.app`, password);
             return true;
+        } catch (error) {
+            console.error("Firebase login error:", error);
+            return false;
         }
-        return false;
     };
 
-    const logout = () => {
-        setCurrentUser(null);
-        localStorage.removeItem('crmCurrentUser');
+    const logout = async () => {
+        await signOut(auth);
     };
 
+    if (loading) {
+        return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
+    }
+
+    // FIX: Corrected typo in the closing tag of AuthContext.Provider.
     return (
         <AuthContext.Provider value={{ currentUser, login, logout }}>
             {children}
@@ -131,7 +117,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 // END: HELPER FUNCTIONS & AUTH CONTEXT
 
 
-// START: ICONS - Replaced emoji with SVG for better UI
+// START: ICONS
 const Icon: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
 );
@@ -168,7 +154,6 @@ const FileTextIcon = ({ className = "w-5 h-5" }) => <Icon className={className}>
 const DownloadIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></Icon>;
 const BellIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></Icon>;
 const CheckCircleIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Icon>;
-
 // END: ICONS
 
 
@@ -645,10 +630,11 @@ const LoginView: React.FC = () => {
     const [error, setError] = useState('');
     const { login } = useAuth();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!login(username, password)) {
+        const success = await login(username, password);
+        if (!success) {
             setError('Tên đăng nhập hoặc mật khẩu không hợp lệ.');
         }
     };
@@ -701,11 +687,15 @@ const MainLayout: React.FC = () => {
     if (!user) return null;
 
     const [activeView, setActiveView] = useState('dashboard');
-    const [users, setUsers] = useState<User[]>([]);
-    const [dataByUser, setDataByUser] = useState<Record<string, CrmData>>({});
-    const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUserId, setSelectedUserId] = useState('all');
+
+    // Firestore real-time data
+    const [users, setUsers] = useState<User[]>([]);
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [reminders, setReminders] = useState<Reminder[]>([]);
+    const [settings, setSettings] = useState<Omit<CrmData, 'customers' | 'reminders' | 'salesGoals'>>({ statuses: [], carModels: [], customerSources: [] });
+    const [isLoading, setIsLoading] = useState(true);
     
     // Modals state
     const [showCustomerForm, setShowCustomerForm] = useState(false);
@@ -716,136 +706,111 @@ const MainLayout: React.FC = () => {
     const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
     const [activeReminderCustomerId, setActiveReminderCustomerId] = useState<string | null>(null);
 
+    // Set up real-time listeners for Firestore data
+    useEffect(() => {
+        setIsLoading(true);
+        const unsubscribes: (() => void)[] = [];
 
-    // Computed data
-    const currentUserData = useMemo(() => dataByUser[user.id] || generateMockData(user.id), [dataByUser, user.id]);
-    const allCustomers = useMemo(() => user.role === 'admin' ? Object.values(dataByUser).flatMap(d => d.customers) : currentUserData.customers, [user.role, dataByUser, currentUserData]);
-    const allReminders = useMemo(() => user.role === 'admin' ? Object.values(dataByUser).flatMap(d => d.reminders) : currentUserData.reminders, [user.role, dataByUser, currentUserData]);
+        // Users listener
+        unsubscribes.push(onSnapshot(collection(db, "users"), (snapshot) => {
+            setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+        }));
+        
+        // Settings listeners
+        unsubscribes.push(onSnapshot(collection(db, "settings", "config", "statuses"), (snapshot) => {
+            setSettings(s => ({...s, statuses: snapshot.docs.map(doc => doc.data() as Status)}));
+        }));
+        unsubscribes.push(onSnapshot(collection(db, "settings", "config", "carModels"), (snapshot) => {
+            setSettings(s => ({...s, carModels: snapshot.docs.map(doc => doc.data() as CarModel)}));
+        }));
+        unsubscribes.push(onSnapshot(collection(db, "settings", "config", "customerSources"), (snapshot) => {
+            setSettings(s => ({...s, customerSources: snapshot.docs.map(doc => doc.data() as CustomerSource)}));
+        }));
+
+        // Data listeners (customers, reminders) based on user role
+        const customerQuery = user.role === Role.ADMIN ? collection(db, "customers") : query(collection(db, "customers"), where("userId", "==", user.id));
+        unsubscribes.push(onSnapshot(customerQuery, (snapshot) => {
+            setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+        }));
+        
+        const reminderQuery = user.role === Role.ADMIN ? collection(db, "reminders") : query(collection(db, "reminders"), where("userId", "==", user.id));
+        unsubscribes.push(onSnapshot(reminderQuery, (snapshot) => {
+            setReminders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder)));
+        }));
+
+        setIsLoading(false);
+        return () => unsubscribes.forEach(unsub => unsub());
+    }, [user.id, user.role]);
     
     // Centralized filtering logic
-    const customersForKanban = useMemo(() => {
-        if (!searchTerm.trim()) return allCustomers;
+    const filteredCustomers = useMemo(() => {
+        let customersToFilter = customers;
+        
+        // Filter by selected user (for admin)
+        if (user.role === 'admin' && selectedUserId !== 'all') {
+            customersToFilter = customersToFilter.filter(customer => customer.userId === selectedUserId);
+        }
+        
+        // Filter by search term
+        if (!searchTerm.trim()) return customersToFilter;
         const term = searchTerm.toLowerCase();
-        return allCustomers.filter(c => 
+        return customersToFilter.filter(c => 
             c.name.toLowerCase().includes(term) || 
             c.phone.includes(term) ||
             (c.carModel && c.carModel.toLowerCase().includes(term)) ||
             (c.source && c.source.toLowerCase().includes(term)) ||
             (c.city && c.city.toLowerCase().includes(term))
         );
-    }, [allCustomers, searchTerm]);
-    
-    const customersForListView = useMemo(() => {
-        if (user.role === 'admin' && selectedUserId !== 'all') {
-            return customersForKanban.filter(customer => customer.userId === selectedUserId);
-        }
-        return customersForKanban;
-    }, [customersForKanban, user.role, selectedUserId]);
+    }, [customers, searchTerm, user.role, selectedUserId]);
 
-    const loadData = useCallback(async () => {
-        setIsLoading(true);
-        let storedData = await StorageService.getAllData();
-        if (!storedData) {
-            const initialDataByUser: Record<string, CrmData> = {};
-            MOCK_USERS.forEach(u => {
-                initialDataByUser[u.id] = generateMockData(u.id);
-            });
-            storedData = { users: MOCK_USERS, dataByUser: initialDataByUser };
-            await StorageService.saveAllData(storedData);
-        }
-        setDataByUser(storedData.dataByUser);
-        setUsers(storedData.users);
-        setIsLoading(false);
-    }, []);
-
-    useEffect(() => { loadData(); }, [loadData]);
-
-    const saveData = useCallback(async (newData: { users: User[], dataByUser: Record<string, CrmData> }) => {
-        if (!isLoading) {
-            await StorageService.saveAllData(newData);
-        }
-    }, [isLoading]);
-
-    // HANDLERS
-    const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
-        const newDataByUser = { ...dataByUser };
-        const newUserData = { ...(newDataByUser[user.id] || generateMockData(user.id)) };
-        
+    // HANDLERS (now interact with Firestore)
+    const handleSaveCustomer = async (customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
         if (existingCustomerId) { // Update
-            newUserData.customers = newUserData.customers.map(c => 
-                c.id === existingCustomerId 
-                ? { ...c, ...customerData, lastContactDate: Date.now() } 
-                : c
-            );
+            const customerRef = doc(db, 'customers', existingCustomerId);
+            await updateDoc(customerRef, { ...customerData, lastContactDate: Date.now() });
         } else { // Create
-            const newCustomer: Customer = {
+            const newCustomer: Omit<Customer, 'id'> = {
                 ...customerData,
-                id: 'cust_' + Date.now(),
                 userId: user.id,
                 createdDate: Date.now(),
                 lastContactDate: Date.now(),
                 interactions: [],
             };
-            newUserData.customers = [...newUserData.customers, newCustomer];
+            await addDoc(collection(db, 'customers'), newCustomer);
         }
-        
-        newDataByUser[user.id] = newUserData;
-        setDataByUser(newDataByUser);
-        saveData({ users, dataByUser: newDataByUser });
     };
 
-    const handleDeleteCustomer = (customerId: string) => {
-        const customer = allCustomers.find(c => c.id === customerId);
-        if (!customer) return;
-
-        const ownerId = customer.userId;
-        const newDataByUser: Record<string, CrmData> = { ...dataByUser };
-        const ownerData = newDataByUser[ownerId];
-
-        if (ownerData) {
-            // FIX: Explicitly cast ownerData to CrmData to resolve type inference issue.
-            const crmOwnerData = ownerData as CrmData;
-            newDataByUser[ownerId] = {
-                ...crmOwnerData,
-                customers: crmOwnerData.customers.filter(c => c.id !== customerId),
-                reminders: crmOwnerData.reminders.filter(r => r.customerId !== customerId),
-            };
-            setDataByUser(newDataByUser);
-            saveData({ users, dataByUser: newDataByUser });
-        }
+    const handleDeleteCustomer = async (customerId: string) => {
+        const customerRef = doc(db, 'customers', customerId);
+        // Also delete associated reminders
+        const remindersQuery = query(collection(db, "reminders"), where("customerId", "==", customerId));
+        const remindersSnapshot = await getDocs(remindersQuery);
+        
+        const batch = writeBatch(db);
+        remindersSnapshot.forEach(doc => batch.delete(doc.ref));
+        batch.delete(customerRef);
+        await batch.commit();
+        
         setDeleteConfirm({ isOpen: false, customerId: '' });
     };
 
-    const handleCustomerUpdate = (customerId: string, updates: Partial<Customer>) => {
-        const customer = allCustomers.find(c => c.id === customerId);
-        if (!customer) return;
-
-        const newDataByUser = { ...dataByUser };
-        const ownerData = newDataByUser[customer.userId];
-        if (ownerData) {
-            const updatedOwnerData = { ...ownerData };
-            updatedOwnerData.customers = updatedOwnerData.customers.map(c =>
-                c.id === customerId ? { ...c, ...updates, lastContactDate: Date.now() } : c
-            );
-            newDataByUser[customer.userId] = updatedOwnerData;
-
-            setDataByUser(newDataByUser);
-            saveData({ users, dataByUser: newDataByUser });
-        }
+    const handleCustomerUpdate = async (customerId: string, updates: Partial<Customer>) => {
+        const customerRef = doc(db, 'customers', customerId);
+        await updateDoc(customerRef, { ...updates, lastContactDate: Date.now() });
     };
 
     const handleAddInteraction = (customerId: string, interaction: Omit<Interaction, 'id'>) => {
-        handleCustomerUpdate(customerId, { 
-            interactions: [...(allCustomers.find(c=>c.id === customerId)?.interactions || []), { ...interaction, id: 'int_' + Date.now() }]
-        });
+        const customer = customers.find(c => c.id === customerId);
+        if(!customer) return;
+        const updatedInteractions = [...(customer.interactions || []), { ...interaction, id: 'int_' + Date.now() }];
+        handleCustomerUpdate(customerId, { interactions: updatedInteractions });
     };
 
     const handleDeleteInteraction = (customerId: string, interactionId: string) => {
-        const customer = allCustomers.find(c => c.id === customerId);
+        const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
-        handleCustomerUpdate(customerId, {
-            interactions: (customer.interactions || []).filter(i => i.id !== interactionId)
-        });
+        const updatedInteractions = (customer.interactions || []).filter(i => i.id !== interactionId);
+        handleCustomerUpdate(customerId, { interactions: updatedInteractions });
     };
     
     const handleGenerateScript = async (customer: Customer) => {
@@ -854,96 +819,24 @@ const MainLayout: React.FC = () => {
         setScriptModal({ isOpen: true, script, isLoading: false });
     };
 
-    const handleSaveReminder = (reminderData: Omit<Reminder, 'id' | 'userId'>, existingReminderId?: string) => {
-        const ownerId = reminderData.customerId ? allCustomers.find(c => c.id === reminderData.customerId)?.userId : user.id;
-        if (!ownerId) return;
-
-        const newDataByUser = { ...dataByUser };
-        const ownerData = newDataByUser[ownerId];
-        
-        if (ownerData) {
-            const updatedOwnerData = { ...ownerData };
-            if (existingReminderId) { // Update
-                updatedOwnerData.reminders = updatedOwnerData.reminders.map(r => r.id === existingReminderId ? { ...r, ...reminderData } : r);
-            } else { // Create
-                const newReminder: Reminder = { ...reminderData, id: `rem_${Date.now()}`, userId: ownerId };
-                updatedOwnerData.reminders = [...updatedOwnerData.reminders, newReminder];
-            }
-
-            newDataByUser[ownerId] = updatedOwnerData;
-            setDataByUser(newDataByUser);
-            saveData({ users, dataByUser: newDataByUser });
+    const handleSaveReminder = async (reminderData: Omit<Reminder, 'id'>, existingReminderId?: string) => {
+        if (existingReminderId) {
+            await updateDoc(doc(db, "reminders", existingReminderId), reminderData);
+        } else {
+            await addDoc(collection(db, "reminders"), reminderData);
         }
     };
     
-    const handleDeleteReminder = (reminderId: string) => {
-        const reminder = allReminders.find(r => r.id === reminderId);
-        if (!reminder) return;
-
-        const newDataByUser = { ...dataByUser };
-        const ownerData = newDataByUser[reminder.userId];
-        if (ownerData) {
-            const updatedOwnerData = { ...ownerData };
-            updatedOwnerData.reminders = updatedOwnerData.reminders.filter(r => r.id !== reminderId);
-            newDataByUser[reminder.userId] = updatedOwnerData;
-            
-            setDataByUser(newDataByUser);
-            saveData({ users, dataByUser: newDataByUser });
-        }
+    const handleDeleteReminder = async (reminderId: string) => {
+        await deleteDoc(doc(db, "reminders", reminderId));
     };
 
-    const handleToggleReminderComplete = (reminderId: string) => {
-        const reminder = allReminders.find(r => r.id === reminderId);
+    const handleToggleReminderComplete = async (reminderId: string) => {
+        const reminder = reminders.find(r => r.id === reminderId);
         if (!reminder) return;
-        
-        const newDataByUser = { ...dataByUser };
-        const ownerData = newDataByUser[reminder.userId];
-        if (ownerData) {
-            const updatedOwnerData = { ...ownerData };
-            updatedOwnerData.reminders = updatedOwnerData.reminders.map(r => r.id === reminderId ? { ...r, completed: !r.completed } : r);
-            newDataByUser[reminder.userId] = updatedOwnerData;
-
-            setDataByUser(newDataByUser);
-            saveData({ users, dataByUser: newDataByUser });
-        }
-    };
-
-    const handleSettingsUpdate = (type: 'carModels' | 'customerSources', data: any[]) => {
-        if (user.role !== 'admin') return;
-        
-        const newDataByUser = { ...dataByUser };
-        // Update settings for all users to maintain consistency
-        Object.keys(newDataByUser).forEach(userId => {
-            newDataByUser[userId] = { ...newDataByUser[userId], [type]: data };
-        });
-
-        setDataByUser(newDataByUser);
-        saveData({ users, dataByUser: newDataByUser });
+        await updateDoc(doc(db, "reminders", reminderId), { completed: !reminder.completed });
     };
     
-    const handleUsersUpdate = (updatedUsers: User[]) => {
-        if(user.role !== 'admin') return;
-        setUsers(updatedUsers);
-        
-        const newDataByUser = { ...dataByUser };
-        updatedUsers.forEach(u => {
-            if(!newDataByUser[u.id]) {
-                newDataByUser[u.id] = generateMockData(u.id);
-            }
-        });
-        
-        // Remove data for deleted users
-        const updatedUserIds = new Set(updatedUsers.map(u => u.id));
-        Object.keys(newDataByUser).forEach(userId => {
-            if (!updatedUserIds.has(userId)) {
-                delete newDataByUser[userId];
-            }
-        });
-
-        setDataByUser(newDataByUser);
-        saveData({ users: updatedUsers, dataByUser: newDataByUser });
-    };
-
     // Modal openers/closers
     const openAddCustomer = () => { setEditingCustomer(null); setShowCustomerForm(true); };
     const openEditCustomer = (customer: Customer) => { setEditingCustomer(customer); setShowCustomerForm(true); };
@@ -974,8 +867,6 @@ const MainLayout: React.FC = () => {
     if (isLoading) {
         return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
     }
-
-    const currentSettingsData = currentUserData;
 
     return (
         <div className="flex h-screen bg-gray-100">
@@ -1019,25 +910,23 @@ const MainLayout: React.FC = () => {
                     </div>
                 </header>
                 <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                   {activeView === 'dashboard' && <Dashboard customers={allCustomers} statuses={currentSettingsData.statuses} reminders={allReminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={handleToggleReminderComplete} onDeleteReminder={handleDeleteReminder} onOpenCustomer={openEditCustomer} />}
-                   {activeView === 'reminders' && <RemindersView reminders={allReminders} customers={allCustomers} onOpenReminderModal={openReminderModal} onToggleComplete={handleToggleReminderComplete} onDelete={handleDeleteReminder} />}
-                   {activeView === 'kanban' && <KanbanView customers={customersForKanban} statuses={currentSettingsData.statuses} reminders={allReminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} searchTerm={searchTerm} />}
-                   {activeView === 'list' && <ListView customers={customersForListView} statuses={currentSettingsData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} />}
-                   {activeView === 'reports' && user.role === 'admin' && <ReportsView customers={allCustomers} users={users} statuses={currentSettingsData.statuses} carModels={currentSettingsData.carModels} customerSources={currentSettingsData.customerSources} />}
-                   {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} carModels={currentSettingsData.carModels} customerSources={currentSettingsData.customerSources} onUsersUpdate={handleUsersUpdate} onSettingsUpdate={handleSettingsUpdate} onDataReset={StorageService.resetData} />}
+                   {activeView === 'dashboard' && <Dashboard customers={customers} statuses={settings.statuses} reminders={reminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={handleToggleReminderComplete} onDeleteReminder={handleDeleteReminder} onOpenCustomer={openEditCustomer} />}
+                   {activeView === 'reminders' && <RemindersView reminders={reminders} customers={customers} onOpenReminderModal={openReminderModal} onToggleComplete={handleToggleReminderComplete} onDelete={handleDeleteReminder} />}
+                   {activeView === 'kanban' && <KanbanView customers={filteredCustomers} statuses={settings.statuses} reminders={reminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} searchTerm={searchTerm} />}
+                   {activeView === 'list' && <ListView customers={filteredCustomers} statuses={settings.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} />}
+                   {activeView === 'reports' && user.role === 'admin' && <ReportsView customers={customers} users={users} statuses={settings.statuses} carModels={settings.carModels} customerSources={settings.customerSources} />}
+                   {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} settings={settings} />}
                 </main>
             </div>
             
-            <CustomerForm isOpen={showCustomerForm} onClose={closeCustomerForm} onSave={handleSaveCustomer} customer={editingCustomer} statuses={currentSettingsData.statuses} carModels={currentSettingsData.carModels} customerSources={currentSettingsData.customerSources} />
+            <CustomerForm isOpen={showCustomerForm} onClose={closeCustomerForm} onSave={handleSaveCustomer} customer={editingCustomer} statuses={settings.statuses} carModels={settings.carModels} customerSources={settings.customerSources} />
             <ConfirmationModal isOpen={deleteConfirm.isOpen} title="Xác nhận xóa" message="Bạn có chắc chắn muốn xóa khách hàng này không? Mọi nhắc hẹn liên quan cũng sẽ bị xóa." onConfirm={() => handleDeleteCustomer(deleteConfirm.customerId)} onCancel={() => setDeleteConfirm({ isOpen: false, customerId: '' })} />
             <ScriptModal isOpen={scriptModal.isOpen} isLoading={scriptModal.isLoading} script={scriptModal.script} onClose={() => setScriptModal({isOpen: false, script: '', isLoading: false})} />
-            <ReminderFormModal isOpen={showReminderForm} onClose={closeReminderModal} onSave={handleSaveReminder} reminder={editingReminder} customerId={activeReminderCustomerId} customers={allCustomers} />
+            <ReminderFormModal isOpen={showReminderForm} onClose={closeReminderModal} onSave={handleSaveReminder} reminder={editingReminder} customerId={activeReminderCustomerId} customers={customers} user={user} />
         </div>
     );
 };
 
-
-// Views and other components that were previously part of the main component
 
 const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'> & { customers: Customer[], onCustomerUpdate: (id: string, updates: Partial<Customer>) => void, searchTerm: string }> = ({ customers, statuses, reminders, onCustomerEdit, onCustomerUpdate, onDelete, onAddInteraction, onDeleteInteraction, onGenerateScript, onOpenReminderModal, users, searchTerm }) => {
     const [draggedCustomerId, setDraggedCustomerId] = useState<string | null>(null);
@@ -1165,7 +1054,7 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
             const bVal = b[sortField as keyof Customer];
 
             if (aVal === bVal) return 0;
-            if (aVal == null) return 1; // Put nulls/undefined at the end for ascending sort
+            if (aVal == null) return 1;
             if (bVal == null) return -1;
 
             if (typeof aVal === 'number' && typeof bVal === 'number') {
@@ -1218,7 +1107,7 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
             case 'name': return customer.name;
             case 'phone': return customer.phone;
             case 'email': return customer.email || '';
-            case 'statusId': return statuses.find(s => s.id === customer.statusId)?.name.replace(/^\d+\.\s/, '') || '---'; // Remove ordering like "1. "
+            case 'statusId': return statuses.find(s => s.id === customer.statusId)?.name.replace(/^\d+\.\s/, '') || '---';
             case 'salesValue': return String(customer.salesValue);
             case 'userId': return getUserName(customer.userId);
             case 'lastContactDate': return customer.lastContactDate ? formatDate(customer.lastContactDate) : '';
@@ -1258,7 +1147,6 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
     
         const csvContent = [headers, ...rows].join('\n');
         
-        // Add BOM for Excel compatibility with UTF-8
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
@@ -1727,652 +1615,3 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
                         </table>
                     </div>
                 </>
-            ) : <p className="text-center text-gray-500 py-8">Không có dữ liệu</p>}
-        </div>
-    );
-};
-
-const AcquisitionBySourceChart: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
-    const chartRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        let chart: Chart | null = null;
-        if (chartRef.current && data.length > 0) {
-            const chartData = {
-                labels: data.map(d => d['Nguồn']),
-                datasets: [{
-                    label: 'Số lượng KH',
-                    data: data.map(d => d['Số lượng KH']),
-                    backgroundColor: 'rgba(79, 70, 229, 0.8)',
-                    borderColor: '#4338ca',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            };
-            chart = new Chart(chartRef.current, {
-                type: 'bar',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                             callbacks: {
-                                label: function(context) {
-                                    const label = context.dataset.label || '';
-                                    const count = context.parsed.y;
-                                    const percentage = data[context.dataIndex]['Tỷ lệ (%)'];
-                                    return `${label}: ${count} (${percentage}%)`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1 // Ensure integer ticks for counts of people
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        return () => {
-            chart?.destroy();
-        };
-    }, [data]);
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Phân tích Nguồn khách hàng</h3>
-                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
-                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
-                </button>
-            </div>
-            
-            {data.length > 0 ? (
-                <>
-                    <div className="mb-6 chart-container h-[250px]">
-                        <canvas ref={chartRef}></canvas>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>{Object.keys(data[0]).map(key => <th key={key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).map(key => <td key={key} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
-                            </tbody>
-                        </table>
-                    </div>
-                </>
-            ) : <p className="text-center text-gray-500 py-8">Không có dữ liệu</p>}
-        </div>
-    );
-};
-
-const ReportsView: React.FC<{customers: Customer[], users: User[], statuses: Status[], carModels: CarModel[], customerSources: CustomerSource[]}> = ({ customers, users, statuses, carModels, customerSources }) => {
-    const [period, setPeriod] = useState('all');
-
-    const filteredCustomers = useMemo(() => {
-        if (period === 'all') return customers;
-        const days = parseInt(period, 10);
-        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-        return customers.filter(c => c.createdDate >= cutoff);
-    }, [customers, period]);
-
-    const salesByUser = useMemo(() => {
-        return users.map(user => {
-            const userCustomers = filteredCustomers.filter(c => c.userId === user.id);
-            const delivered = userCustomers.filter(c => statuses.find(s => s.id === c.statusId)?.type === 'delivered');
-            const revenue = delivered.reduce((sum, c) => sum + c.salesValue, 0);
-            return {
-                'Nhân viên': user.name,
-                'Số KH quản lý': userCustomers.length,
-                'Số xe đã giao': delivered.length,
-                'Doanh số': formatCurrency(revenue),
-                'rawRevenue': revenue
-            };
-        }).sort((a,b) => b.rawRevenue - a.rawRevenue);
-    }, [filteredCustomers, users, statuses]);
-
-    const acquisitionBySource = useMemo(() => {
-        const total = filteredCustomers.length;
-        if (total === 0) return [];
-        return customerSources.map(source => {
-            const count = filteredCustomers.filter(c => c.source === source.name).length;
-            return {
-                'Nguồn': source.name,
-                'Số lượng KH': count,
-                'Tỷ lệ (%)': ((count / total) * 100).toFixed(1)
-            };
-        }).sort((a,b) => b['Số lượng KH'] - a['Số lượng KH']);
-    }, [filteredCustomers, customerSources]);
-
-    const salesByCarModel = useMemo(() => {
-        const deliveredCustomers = filteredCustomers.filter(c => statuses.find(s => s.id === c.statusId)?.type === 'delivered');
-        return carModels.map(model => {
-            const modelSales = deliveredCustomers.filter(c => c.carModel === model.name);
-            const revenue = modelSales.reduce((sum, c) => sum + c.salesValue, 0);
-            return {
-                'Dòng xe': model.name,
-                'Số xe đã giao': modelSales.length,
-                'Doanh số': formatCurrency(revenue),
-                'rawRevenue': revenue
-            };
-        }).sort((a,b) => b.rawRevenue - a.rawRevenue);
-    }, [filteredCustomers, carModels, statuses]);
-
-    const exportToCsv = (data: any[], filename: string) => {
-        if (data.length === 0) {
-            alert("Không có dữ liệu để xuất.");
-            return;
-        }
-        
-        // Remove raw data columns before exporting
-        const dataToExport = data.map(row => {
-            const { rawRevenue, ...rest } = row;
-            return rest;
-        });
-
-        const headers = Object.keys(dataToExport[0]);
-        const csvRows = [
-            headers.join(','),
-            ...dataToExport.map(row => 
-                headers.map(fieldName => {
-                    let cell = row[fieldName] === null || row[fieldName] === undefined ? '' : String(row[fieldName]);
-                    cell = cell.replace(/"/g, '""');
-                    if (cell.search(/("|,|\n)/g) >= 0) {
-                        cell = `"${cell}"`;
-                    }
-                    return cell;
-                }).join(',')
-            )
-        ];
-        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const ReportSection: React.FC<{title: string, data: any[], onExport: () => void}> = ({ title, data, onExport }) => (
-        <div className="bg-white p-6 rounded-xl shadow-sm border">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">{title}</h3>
-                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
-                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
-                </button>
-            </div>
-            <div className="overflow-x-auto">
-                {data.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>{Object.keys(data[0]).filter(k => k !== 'rawRevenue').map(key => <th key={key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).filter(k => k !== 'rawRevenue').map(key => <td key={key} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
-                    </tbody>
-                </table>
-                ) : <p className="text-center text-gray-500 py-8">Không có dữ liệu</p>}
-            </div>
-        </div>
-    );
-
-    return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-800">Báo cáo Hiệu suất</h2>
-                <select value={period} onChange={e => setPeriod(e.target.value)} className="p-2 border rounded-lg bg-white">
-                    <option value="all">Toàn thời gian</option>
-                    <option value="7">7 ngày qua</option>
-                    <option value="30">30 ngày qua</option>
-                    <option value="90">90 ngày qua</option>
-                </select>
-            </div>
-            <ReportSection title="Hiệu suất theo Nhân viên" data={salesByUser} onExport={() => exportToCsv(salesByUser, 'hieu_suat_nhan_vien.csv')} />
-            <AcquisitionBySourceChart data={acquisitionBySource} onExport={() => exportToCsv(acquisitionBySource, 'nguon_khach_hang.csv')} />
-            <CarModelSalesReport data={salesByCarModel} onExport={() => exportToCsv(salesByCarModel, 'doanh_so_dong_xe.csv')} />
-        </div>
-    );
-};
-
-const SettingsPanel: React.FC<{users: User[], carModels: CarModel[], customerSources: CustomerSource[], onUsersUpdate: (u: User[])=>void, onSettingsUpdate: (type: 'carModels' | 'customerSources', data: any[]) => void, onDataReset: ()=>void}> = ({users, carModels, customerSources, onUsersUpdate, onSettingsUpdate, onDataReset}) => {
-    
-    const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-    const [editingUser, setEditingUser] = useState<User | null>(null);
-    const [newCarModel, setNewCarModel] = useState('');
-    const [newSource, setNewSource] = useState('');
-    
-    const handleAdd = (type: 'carModels' | 'customerSources') => {
-        const name = type === 'carModels' ? newCarModel : newSource;
-        if(!name.trim()) return;
-        const current = type === 'carModels' ? carModels : customerSources;
-        const newItem = { id: `${type.slice(0, -1)}_${Date.now()}`, name };
-        onSettingsUpdate(type, [...current, newItem]);
-        type === 'carModels' ? setNewCarModel('') : setNewSource('');
-    };
-
-    const handleDelete = (type: 'carModels' | 'customerSources', id: string) => {
-        const current = type === 'carModels' ? carModels : customerSources;
-        if(current.length <=1) { alert("Phải có ít nhất 1 mục."); return; }
-        onSettingsUpdate(type, current.filter(item => item.id !== id));
-    };
-
-    const openUserModal = (user: User | null) => {
-        setEditingUser(user);
-        setIsUserModalOpen(true);
-    };
-
-    const handleSaveUser = (user: Omit<User, 'id' | 'role'>) => {
-        if (editingUser) { // Update
-            onUsersUpdate(users.map(u => u.id === editingUser.id ? { ...u, ...user } : u));
-        } else { // Create
-            const newUser: User = { ...user, id: `user_${Date.now()}`, role: Role.USER };
-            onUsersUpdate([...users, newUser]);
-        }
-    };
-    
-    const handleDeleteUser = (id: string) => {
-        if(users.filter(u => u.role === 'user').length <=1) {
-            alert("Phải có ít nhất một user."); return;
-        }
-        if(confirm("Bạn có chắc muốn xóa user này? Dữ liệu của họ sẽ bị xóa vĩnh viễn.")) {
-            onUsersUpdate(users.filter(u => u.id !== id));
-        }
-    };
-
-    return (
-    <>
-        <div className="max-w-4xl mx-auto space-y-8">
-            <div className="bg-white p-6 rounded-xl shadow-sm border">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold">Quản lý Tài khoản</h2>
-                    <button onClick={() => openUserModal(null)} className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition flex items-center text-sm">
-                        <PlusIcon className="w-4 h-4 mr-2"/> Thêm User
-                    </button>
-                </div>
-                <div className="space-y-2">
-                    {users.map(user => (
-                        <div key={user.id} className="flex justify-between items-center p-3 border rounded-lg bg-gray-50">
-                            <div>
-                                <p className="font-semibold">{user.name} <span className="text-sm font-normal text-gray-500">({user.username})</span></p>
-                                <p className="text-xs capitalize p-1 bg-gray-200 rounded inline-block">{user.role}</p>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <button onClick={() => openUserModal(user)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full" title="Sửa"><Edit2Icon className="w-5 h-5"/></button>
-                                {user.role !== 'admin' && <button onClick={() => handleDeleteUser(user.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-full" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-white p-6 rounded-xl shadow-sm border">
-                    <h3 className="text-lg font-semibold mb-4">Dòng xe</h3>
-                    <div className="flex space-x-2 mb-4">
-                        <input value={newCarModel} onChange={e => setNewCarModel(e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Tên dòng xe..."/>
-                        <button onClick={() => handleAdd('carModels')} className="px-3 bg-green-500 text-white rounded-lg">Thêm</button>
-                    </div>
-                     <div className="space-y-2">
-                         {carModels.map(m => <div key={m.id} className="flex justify-between items-center p-2 border-b"><p>{m.name}</p><button onClick={()=>handleDelete('carModels', m.id)} className="text-red-500"><XIcon className="w-4 h-4"/></button></div>)}
-                    </div>
-                </div>
-                 <div className="bg-white p-6 rounded-xl shadow-sm border">
-                    <h3 className="text-lg font-semibold mb-4">Nguồn khách hàng</h3>
-                     <div className="flex space-x-2 mb-4">
-                        <input value={newSource} onChange={e => setNewSource(e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Tên nguồn..."/>
-                        <button onClick={() => handleAdd('customerSources')} className="px-3 bg-green-500 text-white rounded-lg">Thêm</button>
-                    </div>
-                     <div className="space-y-2">
-                         {customerSources.map(s => <div key={s.id} className="flex justify-between items-center p-2 border-b"><p>{s.name}</p><button onClick={()=>handleDelete('customerSources', s.id)} className="text-red-500"><XIcon className="w-4 h-4"/></button></div>)}
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-red-200">
-                 <h3 className="text-lg font-semibold text-red-700 mb-2">Vùng nguy hiểm</h3>
-                 <p className="text-sm text-gray-600 mb-4">Hành động này sẽ xóa toàn bộ dữ liệu CRM (khách hàng, tương tác, v.v.) của tất cả người dùng. Không thể hoàn tác.</p>
-                 <button onClick={onDataReset} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition flex items-center">
-                    <AlertTriangleIcon className="w-4 h-4 mr-2"/> Xóa toàn bộ dữ liệu
-                </button>
-            </div>
-        </div>
-        <UserFormModal 
-            isOpen={isUserModalOpen} 
-            onClose={() => setIsUserModalOpen(false)}
-            onSave={handleSaveUser}
-            user={editingUser}
-            allUsers={users}
-        />
-    </>
-    );
-};
-
-interface UserFormModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (user: Omit<User, 'id' | 'role'>) => void;
-    user: User | null;
-    allUsers: User[];
-}
-
-const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, allUsers }) => {
-    const [formData, setFormData] = useState({ name: '', username: '', password: '', confirmPassword: '' });
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        if (isOpen) {
-            if (user) {
-                setFormData({ name: user.name, username: user.username, password: '', confirmPassword: '' });
-            } else {
-                setFormData({ name: '', username: '', password: '', confirmPassword: '' });
-            }
-            setErrors({});
-        }
-    }, [user, isOpen]);
-
-    const validate = () => {
-        const newErrors: Record<string, string> = {};
-        if (!formData.name.trim()) newErrors.name = "Tên không được để trống";
-        if (!formData.username.trim()) {
-            newErrors.username = "Username không được để trống";
-        } else if (allUsers.some(u => u.username.toLowerCase() === formData.username.toLowerCase() && u.id !== user?.id)) {
-            newErrors.username = "Username đã tồn tại";
-        }
-
-        // Password is required for new users.
-        // For existing users, password fields are only validated if a new password is entered.
-        if (!user || formData.password || formData.confirmPassword) {
-            if (!formData.password) {
-                newErrors.password = "Mật khẩu không được để trống";
-            } else if (formData.password.length < 4) {
-                newErrors.password = "Mật khẩu phải có ít nhất 4 ký tự.";
-            }
-            if (formData.password !== formData.confirmPassword) {
-                newErrors.confirmPassword = "Mật khẩu xác nhận không khớp";
-            }
-        }
-        
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!validate()) return;
-        
-        // Prepare the data to be saved.
-        const userToSave: Omit<User, 'id' | 'role'> = {
-            name: formData.name,
-            username: formData.username,
-            // If a new password is provided, use it.
-            // Otherwise, for an existing user, keep their current password.
-            // For a new user, the password from the form is used (validation ensures it's not empty).
-            password: formData.password ? formData.password : user?.password,
-        };
-        
-        onSave(userToSave);
-        onClose();
-    };
-
-    return (
-        <Modal isOpen={isOpen} title={user ? "Chỉnh sửa User" : "Thêm User mới"} onClose={onClose}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Tên hiển thị *</label>
-                    <input type="text" value={formData.name} onChange={e => setFormData(p => ({...p, name: e.target.value}))} className={`w-full p-2 border rounded-lg ${errors.name ? 'border-red-500' : 'border-gray-300'}`} />
-                    {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Username (dùng để đăng nhập) *</label>
-                    <input type="text" value={formData.username} onChange={e => setFormData(p => ({...p, username: e.target.value}))} className={`w-full p-2 border rounded-lg ${errors.username ? 'border-red-500' : 'border-gray-300'}`} />
-                    {errors.username && <p className="text-red-500 text-sm mt-1">{errors.username}</p>}
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Mật khẩu {user ? '(Để trống nếu không đổi)' : '*'}</label>
-                    <input type="password" value={formData.password} onChange={e => setFormData(p => ({...p, password: e.target.value}))} className={`w-full p-2 border rounded-lg ${errors.password ? 'border-red-500' : 'border-gray-300'}`} />
-                    {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Xác nhận Mật khẩu {user ? '' : '*'}</label>
-                    <input type="password" value={formData.confirmPassword} onChange={e => setFormData(p => ({...p, confirmPassword: e.target.value}))} className={`w-full p-2 border rounded-lg ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`} />
-                    {errors.confirmPassword && <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>}
-                </div>
-                 <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
-                    <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100">Hủy</button>
-                    <button type="submit" className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 flex items-center">
-                        <SaveIcon className="w-4 h-4 mr-2" /> Lưu
-                    </button>
-                </div>
-            </form>
-        </Modal>
-    );
-};
-
-interface ReminderFormModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (reminder: Omit<Reminder, 'id' | 'userId'>, id?: string) => void;
-    reminder: Reminder | null;
-    customerId: string | null;
-    customers: Customer[];
-}
-const ReminderFormModal: React.FC<ReminderFormModalProps> = ({ isOpen, onClose, onSave, reminder, customerId, customers }) => {
-    const [formData, setFormData] = useState({ title: '', description: '', dueDate: '', priority: 'medium' as Reminder['priority'], customerId: '' });
-    useEffect(() => {
-        if (isOpen) {
-            if (reminder) {
-                setFormData({
-                    title: reminder.title,
-                    description: reminder.description,
-                    dueDate: new Date(reminder.dueDate).toISOString().split('T')[0],
-                    priority: reminder.priority,
-                    customerId: reminder.customerId,
-                });
-            } else {
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                setFormData({
-                    title: '',
-                    description: '',
-                    dueDate: tomorrow.toISOString().split('T')[0],
-                    priority: 'medium',
-                    customerId: customerId || '',
-                });
-            }
-        }
-    }, [isOpen, reminder, customerId]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!formData.title || !formData.dueDate) {
-            alert("Vui lòng nhập tiêu đề và ngày hẹn.");
-            return;
-        }
-        onSave({
-            ...formData,
-            dueDate: new Date(formData.dueDate).getTime(),
-            completed: reminder?.completed || false,
-        }, reminder?.id);
-        onClose();
-    };
-    return (
-        <Modal isOpen={isOpen} title={reminder ? "Sửa Nhắc hẹn" : "Thêm Nhắc hẹn"} onClose={onClose}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Tiêu đề *</label>
-                    <input type="text" value={formData.title} onChange={e => setFormData(p => ({ ...p, title: e.target.value }))} className="w-full p-2 border rounded-lg border-gray-300" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Khách hàng</label>
-                    <select value={formData.customerId} onChange={e => setFormData(p => ({ ...p, customerId: e.target.value }))} className="w-full p-2 border rounded-lg border-gray-300" disabled={!!customerId}>
-                        <option value="">-- Chọn khách hàng --</option>
-                        {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Ngày hẹn *</label>
-                        <input type="date" value={formData.dueDate} onChange={e => setFormData(p => ({ ...p, dueDate: e.target.value }))} className="w-full p-2 border rounded-lg border-gray-300" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Ưu tiên</label>
-                        <select value={formData.priority} onChange={e => setFormData(p => ({ ...p, priority: e.target.value as Reminder['priority'] }))} className="w-full p-2 border rounded-lg border-gray-300">
-                            <option value="high">Cao</option>
-                            <option value="medium">Trung bình</option>
-                            <option value="low">Thấp</option>
-                        </select>
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Mô tả</label>
-                    <textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} rows={3} className="w-full p-2 border rounded-lg border-gray-300" />
-                </div>
-                <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
-                    <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100">Hủy</button>
-                    <button type="submit" className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 flex items-center">
-                        <SaveIcon className="w-4 h-4 mr-2" /> Lưu
-                    </button>
-                </div>
-            </form>
-        </Modal>
-    );
-};
-
-const RemindersView: React.FC<{ reminders: Reminder[], customers: Customer[], onOpenReminderModal: (customerId: string | null, reminder?: Reminder) => void, onToggleComplete: (id: string) => void, onDelete: (id: string) => void }> = ({ reminders, customers, onOpenReminderModal, onToggleComplete, onDelete }) => {
-    
-    const { highPriority, mediumPriority, lowPriority } = useMemo(() => {
-        const activeReminders = reminders.filter(r => !r.completed).sort((a,b) => a.dueDate - b.dueDate);
-
-        return {
-            highPriority: activeReminders.filter(r => r.priority === 'high'),
-            mediumPriority: activeReminders.filter(r => r.priority === 'medium'),
-            lowPriority: activeReminders.filter(r => r.priority === 'low'),
-        };
-    }, [reminders]);
-
-    const ReminderSection: React.FC<{title: string, reminders: Reminder[], colorClass: string}> = ({title, reminders, colorClass}) => {
-        if (reminders.length === 0) return null;
-        return (
-            <div>
-                <h3 className={`text-lg font-semibold mb-3 ${colorClass}`}>{title} ({reminders.length})</h3>
-                <div className="space-y-3">
-                    {reminders.map(rem => <ReminderItem key={rem.id} reminder={rem} customer={customers.find(c => c.id === rem.customerId)} onEdit={() => onOpenReminderModal(rem.customerId, rem)} onToggleComplete={() => onToggleComplete(rem.id)} onDelete={() => onDelete(rem.id)} />)}
-                </div>
-            </div>
-        )
-    }
-
-    return (
-        <div className="space-y-8">
-             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-800">Quản lý Nhắc hẹn</h2>
-                <button onClick={() => onOpenReminderModal(null)} className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition flex items-center">
-                    <PlusIcon className="w-4 h-4 mr-2"/> Thêm Nhắc hẹn
-                </button>
-            </div>
-
-            {reminders.filter(r => !r.completed).length === 0 ? (
-                 <div className="text-center py-16 bg-white rounded-lg border shadow-sm">
-                    <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto" />
-                    <h3 className="mt-4 text-xl font-semibold">Tuyệt vời!</h3>
-                    <p className="text-gray-500 mt-1">Bạn không có nhắc hẹn nào cần hoàn thành.</p>
-                </div>
-            ) : (
-                <div className="space-y-6">
-                    <ReminderSection title="Ưu tiên Cao" reminders={highPriority} colorClass="text-red-600" />
-                    <ReminderSection title="Ưu tiên Trung bình" reminders={mediumPriority} colorClass="text-yellow-600" />
-                    <ReminderSection title="Ưu tiên Thấp" reminders={lowPriority} colorClass="text-gray-600" />
-                </div>
-            )}
-        </div>
-    );
-};
-
-const ReminderItem: React.FC<{ 
-    reminder: Reminder, 
-    customer?: Customer, 
-    onEdit: ()=>void, 
-    onToggleComplete: ()=>void, 
-    onDelete: ()=>void,
-    onCustomerClick?: (customer: Customer) => void 
-}> = ({ reminder, customer, onEdit, onToggleComplete, onDelete, onCustomerClick }) => {
-    const priorityClasses: Record<Reminder['priority'], string> = {
-        high: 'border-red-500',
-        medium: 'border-yellow-500',
-        low: 'border-gray-300'
-    };
-    
-    const handleCustomerClick = () => {
-        if (customer && onCustomerClick) {
-            onCustomerClick(customer);
-        }
-    };
-
-    return (
-        <div className={`p-4 bg-white rounded-lg border-l-4 ${priorityClasses[reminder.priority]} shadow-sm flex items-center justify-between transition-all hover:shadow-md`}>
-            <div className="flex items-center flex-1 min-w-0">
-                <button onClick={onToggleComplete} className="mr-4 text-gray-400 hover:text-green-500 flex-shrink-0"><CheckCircleIcon className="w-6 h-6"/></button>
-                <div className="flex-1 min-w-0">
-                    <p
-                        className="font-semibold text-gray-800 truncate"
-                        title={reminder.title}
-                    >
-                        {reminder.title}
-                    </p>
-                    {customer && (
-                        <p
-                            className="text-sm text-indigo-600 truncate cursor-pointer hover:underline"
-                            onClick={handleCustomerClick}
-                        >
-                            {customer.name}
-                        </p>
-                    )}
-                    <p className="text-sm text-gray-500">{formatDate(reminder.dueDate)}</p>
-                </div>
-            </div>
-             <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
-                <button onClick={onEdit} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full" title="Sửa"><Edit2Icon className="w-4 h-4"/></button>
-                <button onClick={onDelete} className="p-2 text-red-500 hover:bg-red-100 rounded-full" title="Xóa"><Trash2Icon className="w-4 h-4"/></button>
-            </div>
-        </div>
-    );
-};
-
-const UpcomingRemindersWidget: React.FC<{reminders: Reminder[], customers: Customer[], onEditReminder: (rem: Reminder) => void, onToggleComplete: (id: string) => void, onDeleteReminder: (id: string) => void, onOpenCustomer: (customer: Customer) => void}> = ({reminders, customers, onEditReminder, onToggleComplete, onDeleteReminder, onOpenCustomer}) => {
-    const upcoming = useMemo(() => {
-        return reminders.filter(r => !r.completed).sort((a,b) => a.dueDate - b.dueDate).slice(0, 5);
-    }, [reminders]);
-
-    return (
-        <div>
-            <h3 className="text-lg font-semibold mb-4">Nhắc hẹn Sắp tới</h3>
-            {upcoming.length === 0 ? <p className="text-gray-500 py-8 text-center">Không có nhắc hẹn nào.</p> : (
-                <div className="space-y-3">
-                    {upcoming.map(rem => {
-                        const customer = customers.find(c => c.id === rem.customerId);
-                        return <ReminderItem 
-                            key={rem.id} 
-                            reminder={rem} 
-                            customer={customer} 
-                            onEdit={() => onEditReminder(rem)} 
-                            onToggleComplete={() => onToggleComplete(rem.id)} 
-                            onDelete={() => onDeleteReminder(rem.id)}
-                            onCustomerClick={onOpenCustomer}
-                        />
-                    })}
-                </div>
-            )}
-        </div>
-    )
-}
-
-// FIX: Removed extraneous text from the end of the file that was causing syntax errors.
-export default App;
