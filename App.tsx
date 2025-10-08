@@ -773,13 +773,12 @@ const MainLayout: React.FC = () => {
         const ownerData = newDataByUser[ownerId];
 
         if (ownerData) {
-            // FIX: Despite resolving a circular dependency, TypeScript still infers `ownerData` as `unknown` here.
-            // Adding an explicit cast to CrmData to resolve the type error.
-            const typedOwnerData = ownerData as CrmData;
+            // FIX: Explicitly cast ownerData to CrmData to resolve type inference issue.
+            const crmOwnerData = ownerData as CrmData;
             newDataByUser[ownerId] = {
-                ...typedOwnerData,
-                customers: typedOwnerData.customers.filter(c => c.id !== customerId),
-                reminders: typedOwnerData.reminders.filter(r => r.customerId !== customerId),
+                ...crmOwnerData,
+                customers: crmOwnerData.customers.filter(c => c.id !== customerId),
+                reminders: crmOwnerData.reminders.filter(r => r.customerId !== customerId),
             };
             setDataByUser(newDataByUser);
             saveData({ users, dataByUser: newDataByUser });
@@ -1130,24 +1129,34 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const processedCustomers = useMemo(() => {
-        let sorted = [...customers];
-        return sorted.sort((a, b) => {
+    const sortedCustomers = useMemo(() => {
+        return [...customers].sort((a, b) => {
             const aVal = a[sortField as keyof Customer];
             const bVal = b[sortField as keyof Customer];
-            if(aVal === bVal) return 0;
-            
-            const direction = sortDirection === 'asc' ? 1 : -1;
+
+            if (aVal === bVal) return 0;
+            if (aVal == null) return 1; // Put nulls/undefined at the end for ascending sort
+            if (bVal == null) return -1;
 
             if (typeof aVal === 'number' && typeof bVal === 'number') {
-                return (aVal - bVal) * direction;
+                return aVal - bVal;
             }
             if (typeof aVal === 'string' && typeof bVal === 'string') {
-                return aVal.localeCompare(bVal) * direction;
+                return aVal.localeCompare(bVal);
             }
-            return (aVal > bVal ? 1 : -1) * direction;
+            
+            if (aVal > bVal) return 1;
+            if (bVal > aVal) return -1;
+            return 0;
         });
-    }, [customers, sortField, sortDirection]);
+    }, [customers, sortField]);
+
+    const processedCustomers = useMemo(() => {
+        if (sortDirection === 'desc') {
+            return [...sortedCustomers].reverse();
+        }
+        return sortedCustomers;
+    }, [sortedCustomers, sortDirection]);
 
     const handleSort = (field: keyof Customer | 'userId') => {
         if (field === sortField) {
