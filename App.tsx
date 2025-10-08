@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 // FIX: Import `Role` and other types from `types.ts` to break circular dependency.
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData } from './types';
@@ -2375,4 +2374,5 @@ const UpcomingRemindersWidget: React.FC<{reminders: Reminder[], customers: Custo
     )
 }
 
+// FIX: Removed extraneous text from the end of the file that was causing syntax errors.
 export default App;
