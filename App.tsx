@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
-import type { User, Customer, Status, CarModel, CustomerSource, Interaction, Reminder, CrmData } from './types';
+// FIX: Import `Role` and other types from `types.ts` to break circular dependency.
+import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData } from './types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from './constants';
 import { GeminiService } from './services/geminiService';
 import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement } from 'chart.js';
 
-// Re-export Role enum here to be self-contained and avoid circular dependencies with types.ts
-export enum Role {
-  ADMIN = 'admin',
-  USER = 'user'
-}
+// FIX: Role enum has been moved to types.ts to break the circular dependency.
 
 // Register Chart.js components
 Chart.register(DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement);
@@ -379,6 +376,29 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ interactions, o
     );
 };
 
+const Highlight: React.FC<{ text: string | undefined; highlight: string }> = ({ text, highlight }) => {
+    const safeText = text || '';
+    if (!highlight.trim()) {
+        return <>{safeText}</>;
+    }
+    const escapedHighlight = highlight.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(${escapedHighlight})`, 'gi');
+    const parts = safeText.split(regex);
+
+    return (
+        <>
+            {parts.map((part, i) =>
+                regex.test(part) ? (
+                    <mark key={i} className="bg-yellow-200 p-0 rounded-sm">
+                        {part}
+                    </mark>
+                ) : (
+                    part
+                )
+            )}
+        </>
+    );
+};
 
 interface CustomerCardProps {
     customer: Customer;
@@ -392,8 +412,9 @@ interface CustomerCardProps {
     onGenerateScript: (customer: Customer) => void;
     onOpenReminderModal: (customerId: string) => void;
     users: User[];
+    searchTerm?: string;
 }
-const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminders, onCustomerEdit, onDelete, onStatusChange, onAddInteraction, onDeleteInteraction, onGenerateScript, onOpenReminderModal, users }) => {
+const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminders, onCustomerEdit, onDelete, onStatusChange, onAddInteraction, onDeleteInteraction, onGenerateScript, onOpenReminderModal, users, searchTerm = '' }) => {
     const [showDetails, setShowDetails] = useState(false);
     const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
     const lastInteraction = useMemo(() => customer.interactions?.length > 0 ? [...customer.interactions].sort((a, b) => b.date - a.date)[0] : null, [customer.interactions]);
@@ -403,16 +424,16 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminde
         <div className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all">
             <div className="p-4">
                 <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-lg truncate pr-2 min-w-0">{customer.name}</h3>
+                    <h3 className="font-semibold text-lg truncate pr-2 min-w-0"><Highlight text={customer.name} highlight={searchTerm} /></h3>
                      <div className="flex items-center space-x-2 flex-shrink-0">
                          {activeReminder && <div className="text-yellow-500" title={`Nhắc hẹn: ${formatDate(activeReminder.dueDate)}`}><BellIcon className="w-4 h-4"/></div>}
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${tierConfig?.color} border border-current`}>{tierConfig?.value}</span>
                     </div>
                 </div>
-                <div className="flex items-center text-sm text-gray-600 mb-4"><PhoneIcon className="w-4 h-4 mr-2" />{customer.phone}</div>
+                <div className="flex items-center text-sm text-gray-600 mb-4"><PhoneIcon className="w-4 h-4 mr-2" /><Highlight text={customer.phone} highlight={searchTerm} /></div>
                 <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center"><CarIcon className="w-4 h-4 mr-2" /><span>{customer.carModel || '---'}</span></div>
-                    <div className="flex items-center"><LayersIcon className="w-4 h-4 mr-2" /><span>{customer.source || '---'}</span></div>
+                    <div className="flex items-center"><CarIcon className="w-4 h-4 mr-2" /><span><Highlight text={customer.carModel} highlight={searchTerm} /></span></div>
+                    <div className="flex items-center"><LayersIcon className="w-4 h-4 mr-2" /><span><Highlight text={customer.source} highlight={searchTerm} /></span></div>
                 </div>
                 <select value={customer.statusId} onChange={(e) => onStatusChange(customer.id, e.target.value)} className="w-full p-2 border rounded-lg text-sm bg-gray-50">
                     {statuses.sort((a, b) => a.order - b.order).map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
@@ -675,15 +696,20 @@ const MainLayout: React.FC = () => {
     const customersForKanban = useMemo(() => {
         if (!searchTerm.trim()) return allCustomers;
         const term = searchTerm.toLowerCase();
-        return allCustomers.filter(c => c.name.toLowerCase().includes(term) || c.phone.includes(term));
+        return allCustomers.filter(c => 
+            c.name.toLowerCase().includes(term) || 
+            c.phone.includes(term) ||
+            (c.carModel && c.carModel.toLowerCase().includes(term)) ||
+            (c.source && c.source.toLowerCase().includes(term)) ||
+            (c.city && c.city.toLowerCase().includes(term))
+        );
     }, [allCustomers, searchTerm]);
     
     const customersForListView = useMemo(() => {
-        let filtered = [...customersForKanban];
         if (user.role === 'admin' && selectedUserId !== 'all') {
-            filtered = filtered.filter(customer => customer.userId === selectedUserId);
+            return customersForKanban.filter(customer => customer.userId === selectedUserId);
         }
-        return filtered;
+        return customersForKanban;
     }, [customersForKanban, user.role, selectedUserId]);
 
     const loadData = useCallback(async () => {
@@ -738,29 +764,29 @@ const MainLayout: React.FC = () => {
         saveData({ users, dataByUser: newDataByUser });
     };
 
-    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties. This prevents crashes if user data is unexpectedly missing.
     const handleDeleteCustomer = (customerId: string) => {
         const customer = allCustomers.find(c => c.id === customerId);
         if (!customer) return;
 
-        const newDataByUser = { ...dataByUser };
-        const ownerData = newDataByUser[customer.userId];
-        if (ownerData) {
-            // FIX: Replaced mutable update with a functional approach to resolve type inference issues.
-            newDataByUser[customer.userId] = {
-                ...ownerData,
-                customers: ownerData.customers.filter(c => c.id !== customerId),
-                // Also delete associated reminders
-                reminders: ownerData.reminders.filter(r => r.customerId !== customerId),
-            };
+        const ownerId = customer.userId;
+        const newDataByUser: Record<string, CrmData> = { ...dataByUser };
+        const ownerData = newDataByUser[ownerId];
 
+        if (ownerData) {
+            // FIX: Despite resolving a circular dependency, TypeScript still infers `ownerData` as `unknown` here.
+            // Adding an explicit cast to CrmData to resolve the type error.
+            const typedOwnerData = ownerData as CrmData;
+            newDataByUser[ownerId] = {
+                ...typedOwnerData,
+                customers: typedOwnerData.customers.filter(c => c.id !== customerId),
+                reminders: typedOwnerData.reminders.filter(r => r.customerId !== customerId),
+            };
             setDataByUser(newDataByUser);
             saveData({ users, dataByUser: newDataByUser });
         }
         setDeleteConfirm({ isOpen: false, customerId: '' });
     };
 
-    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleCustomerUpdate = (customerId: string, updates: Partial<Customer>) => {
         const customer = allCustomers.find(c => c.id === customerId);
         if (!customer) return;
@@ -799,7 +825,6 @@ const MainLayout: React.FC = () => {
         setScriptModal({ isOpen: true, script, isLoading: false });
     };
 
-    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleSaveReminder = (reminderData: Omit<Reminder, 'id' | 'userId'>, existingReminderId?: string) => {
         const ownerId = reminderData.customerId ? allCustomers.find(c => c.id === reminderData.customerId)?.userId : user.id;
         if (!ownerId) return;
@@ -822,7 +847,6 @@ const MainLayout: React.FC = () => {
         }
     };
     
-    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleDeleteReminder = (reminderId: string) => {
         const reminder = allReminders.find(r => r.id === reminderId);
         if (!reminder) return;
@@ -839,7 +863,6 @@ const MainLayout: React.FC = () => {
         }
     };
 
-    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleToggleReminderComplete = (reminderId: string) => {
         const reminder = allReminders.find(r => r.id === reminderId);
         if (!reminder) return;
@@ -957,7 +980,7 @@ const MainLayout: React.FC = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 <header className="h-16 bg-white border-b flex items-center justify-between px-6 flex-shrink-0">
                     <div className="relative w-96">
-                        <input type="text" placeholder="Tìm kiếm khách hàng..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"/>
+                        <input type="text" placeholder="Tìm kiếm KH, SĐT, xe, nguồn, TP..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"/>
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><SearchIcon/></div>
                     </div>
                     <div>
@@ -969,8 +992,8 @@ const MainLayout: React.FC = () => {
                 <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                    {activeView === 'dashboard' && <Dashboard customers={allCustomers} statuses={currentSettingsData.statuses} reminders={allReminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={handleToggleReminderComplete} onDeleteReminder={handleDeleteReminder} onOpenCustomer={openEditCustomer} />}
                    {activeView === 'reminders' && <RemindersView reminders={allReminders} customers={allCustomers} onOpenReminderModal={openReminderModal} onToggleComplete={handleToggleReminderComplete} onDelete={handleDeleteReminder} />}
-                   {activeView === 'kanban' && <KanbanView customers={customersForKanban} statuses={currentSettingsData.statuses} reminders={allReminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} />}
-                   {activeView === 'list' && <ListView customers={customersForListView} statuses={currentSettingsData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId}/>}
+                   {activeView === 'kanban' && <KanbanView customers={customersForKanban} statuses={currentSettingsData.statuses} reminders={allReminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} searchTerm={searchTerm} />}
+                   {activeView === 'list' && <ListView customers={customersForListView} statuses={currentSettingsData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} />}
                    {activeView === 'reports' && user.role === 'admin' && <ReportsView customers={allCustomers} users={users} statuses={currentSettingsData.statuses} carModels={currentSettingsData.carModels} customerSources={currentSettingsData.customerSources} />}
                    {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} carModels={currentSettingsData.carModels} customerSources={currentSettingsData.customerSources} onUsersUpdate={handleUsersUpdate} onSettingsUpdate={handleSettingsUpdate} onDataReset={StorageService.resetData} />}
                 </main>
@@ -987,7 +1010,7 @@ const MainLayout: React.FC = () => {
 
 // Views and other components that were previously part of the main component
 
-const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'> & { customers: Customer[], onCustomerUpdate: (id: string, updates: Partial<Customer>) => void }> = ({ customers, statuses, reminders, onCustomerEdit, onCustomerUpdate, onDelete, onAddInteraction, onDeleteInteraction, onGenerateScript, onOpenReminderModal, users }) => {
+const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'> & { customers: Customer[], onCustomerUpdate: (id: string, updates: Partial<Customer>) => void, searchTerm: string }> = ({ customers, statuses, reminders, onCustomerEdit, onCustomerUpdate, onDelete, onAddInteraction, onDeleteInteraction, onGenerateScript, onOpenReminderModal, users, searchTerm }) => {
     const [draggedCustomerId, setDraggedCustomerId] = useState<string | null>(null);
 
     const handleDrop = (e: React.DragEvent, targetStatusId: string) => {
@@ -1043,6 +1066,7 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
                                         onGenerateScript={onGenerateScript}
                                         onOpenReminderModal={onOpenReminderModal}
                                         users={users}
+                                        searchTerm={searchTerm}
                                     />
                                 </div>
                             ))}
@@ -1069,8 +1093,9 @@ interface ListViewProps {
     currentUser: User;
     selectedUserId: string;
     onSelectedUserChange: (userId: string) => void;
+    searchTerm: string;
 }
-const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, users, currentUser, selectedUserId, onSelectedUserChange}) => {
+const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, users, currentUser, selectedUserId, onSelectedUserChange, searchTerm}) => {
     const [sortField, setSortField] = useState<keyof Customer | 'userId'>('lastContactDate');
     const [sortDirection, setSortDirection] = useState('desc');
     
@@ -1079,6 +1104,7 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
         { key: 'phone', label: 'Liên hệ' },
         { key: 'carModel', label: 'Dòng xe' },
         { key: 'source', label: 'Nguồn' },
+        { key: 'city', label: 'Thành Phố' },
         { key: 'statusId', label: 'Trạng thái' },
         { key: 'tier', label: 'Phân loại' },
         { key: 'salesValue', label: 'Giá trị' },
@@ -1153,14 +1179,14 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
             case 'name':
                 return (
                     <>
-                        <div className="font-medium text-gray-900">{customer.name}</div>
-                        <div className="text-sm text-gray-500">{customer.carModel || 'Chưa rõ xe'}</div>
+                        <div className="font-medium text-gray-900"><Highlight text={customer.name} highlight={searchTerm} /></div>
+                        <div className="text-sm text-gray-500"><Highlight text={customer.carModel} highlight={searchTerm} /></div>
                     </>
                 );
             case 'phone':
                 return (
                     <>
-                        <div className="text-sm text-gray-900">{customer.phone}</div>
+                        <div className="text-sm text-gray-900"><Highlight text={customer.phone} highlight={searchTerm} /></div>
                         <div className="text-sm text-gray-500 truncate max-w-[150px]">{customer.email}</div>
                     </>
                 );
@@ -1176,9 +1202,11 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
             case 'createdDate':
                 return <span className="text-sm text-gray-500">{formatDate(customer.createdDate)}</span>;
             case 'carModel':
-                return <span className="text-sm text-gray-500">{customer.carModel || '---'}</span>;
+                return <span className="text-sm text-gray-500"><Highlight text={customer.carModel} highlight={searchTerm} /></span>;
             case 'source':
-                return <span className="text-sm text-gray-500">{customer.source || '---'}</span>;
+                return <span className="text-sm text-gray-500"><Highlight text={customer.source} highlight={searchTerm} /></span>;
+             case 'city':
+                return <span className="text-sm text-gray-500"><Highlight text={customer.city} highlight={searchTerm} /></span>;
             case 'tier':
                 const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
                 return <span className={`text-sm font-semibold ${tierConfig?.color}`}>{tierConfig?.value}</span>;
@@ -1469,33 +1497,50 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
         if (chartRef.current && data.length > 0) {
             const chartData = {
                 labels: data.map(d => d['Dòng xe']),
-                datasets: [{
-                    label: 'Doanh số',
-                    data: data.map(d => d.rawRevenue),
-                    backgroundColor: '#4f46e5',
-                    borderColor: '#4338ca',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
+                datasets: [
+                    {
+                        label: 'Doanh số',
+                        data: data.map(d => d.rawRevenue),
+                        backgroundColor: 'rgba(79, 70, 229, 0.8)',
+                        borderColor: '#4338ca',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        yAxisID: 'yRevenue',
+                        order: 2,
+                    },
+                    {
+                        label: 'Số xe đã giao',
+                        data: data.map(d => d['Số xe đã giao']),
+                        backgroundColor: 'rgba(22, 163, 74, 0.8)',
+                        borderColor: '#15803d',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        yAxisID: 'yCount',
+                        order: 1,
+                    }
+                ]
             };
             chart = new Chart(chartRef.current, {
                 type: 'bar',
                 data: chartData,
                 options: {
-                    indexAxis: 'y', // Makes it a horizontal bar chart
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false },
+                        legend: { display: true, position: 'top' },
                         tooltip: {
-                             callbacks: {
+                            callbacks: {
                                 label: function(context) {
                                     let label = context.dataset.label || '';
                                     if (label) {
                                         label += ': ';
                                     }
-                                    if (context.parsed.x !== null) {
-                                        label += formatCurrency(context.parsed.x);
+                                    if (context.parsed.y !== null) {
+                                        if (context.dataset.label === 'Doanh số') {
+                                            label += formatCurrency(context.parsed.y);
+                                        } else {
+                                            label += context.parsed.y;
+                                        }
                                     }
                                     return label;
                                 }
@@ -1504,16 +1549,46 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
                     },
                     scales: {
                         x: {
+                            stacked: false,
+                        },
+                        yRevenue: {
+                            type: 'linear',
+                            position: 'left',
                             beginAtZero: true,
+                            grid: {
+                                drawOnChartArea: true,
+                            },
                             ticks: {
                                 callback: function(value) {
-                                     if (typeof value === 'number') {
+                                    if (typeof value === 'number') {
                                         if (value >= 1e9) return (value / 1e9) + 'B';
                                         if (value >= 1e6) return (value / 1e6) + 'M';
-                                        if (value >= 1e3) return (value / 1e3) + 'K';
                                     }
                                     return value;
-                                }
+                                },
+                                color: '#4f46e5',
+                            },
+                            title: {
+                                display: true,
+                                text: 'Doanh số (VNĐ)',
+                                color: '#4f46e5',
+                            }
+                        },
+                        yCount: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            ticks: {
+                                stepSize: 1,
+                                color: '#16a34a',
+                            },
+                            title: {
+                                display: true,
+                                text: 'Số xe đã giao',
+                                color: '#16a34a',
                             }
                         }
                     }
@@ -1528,7 +1603,89 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Doanh số theo Dòng xe</h3>
+                <h3 className="text-lg font-semibold">Hiệu suất theo Dòng xe</h3>
+                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
+                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
+                </button>
+            </div>
+            
+            {data.length > 0 ? (
+                <>
+                    <div className="mb-6 chart-container h-[350px]">
+                        <canvas ref={chartRef}></canvas>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>{Object.keys(data[0]).filter(k => k !== 'rawRevenue').map(key => <th key={key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).filter(k => k !== 'rawRevenue').map(key => <td key={key} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            ) : <p className="text-center text-gray-500 py-8">Không có dữ liệu</p>}
+        </div>
+    );
+};
+
+const AcquisitionBySourceChart: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        let chart: Chart | null = null;
+        if (chartRef.current && data.length > 0) {
+            const chartData = {
+                labels: data.map(d => d['Nguồn']),
+                datasets: [{
+                    label: 'Số lượng KH',
+                    data: data.map(d => d['Số lượng KH']),
+                    backgroundColor: 'rgba(79, 70, 229, 0.8)',
+                    borderColor: '#4338ca',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            };
+            chart = new Chart(chartRef.current, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                             callbacks: {
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const count = context.parsed.y;
+                                    const percentage = data[context.dataIndex]['Tỷ lệ (%)'];
+                                    return `${label}: ${count} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1 // Ensure integer ticks for counts of people
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        return () => {
+            chart?.destroy();
+        };
+    }, [data]);
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Phân tích Nguồn khách hàng</h3>
                 <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
                     <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
                 </button>
@@ -1542,10 +1699,10 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
-                                <tr>{Object.keys(data[0]).filter(k => k !== 'rawRevenue').map(key => <th key={key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
+                                <tr>{Object.keys(data[0]).map(key => <th key={key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).filter(k => k !== 'rawRevenue').map(key => <td key={key} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
+                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).map(key => <td key={key} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
                             </tbody>
                         </table>
                     </div>
@@ -1677,7 +1834,7 @@ const ReportsView: React.FC<{customers: Customer[], users: User[], statuses: Sta
                 </select>
             </div>
             <ReportSection title="Hiệu suất theo Nhân viên" data={salesByUser} onExport={() => exportToCsv(salesByUser, 'hieu_suat_nhan_vien.csv')} />
-            <ReportSection title="Phân tích Nguồn khách hàng" data={acquisitionBySource} onExport={() => exportToCsv(acquisitionBySource, 'nguon_khach_hang.csv')} />
+            <AcquisitionBySourceChart data={acquisitionBySource} onExport={() => exportToCsv(acquisitionBySource, 'nguon_khach_hang.csv')} />
             <CarModelSalesReport data={salesByCarModel} onExport={() => exportToCsv(salesByCarModel, 'doanh_so_dong_xe.csv')} />
         </div>
     );
@@ -1989,19 +2146,13 @@ const ReminderFormModal: React.FC<ReminderFormModalProps> = ({ isOpen, onClose, 
 
 const RemindersView: React.FC<{ reminders: Reminder[], customers: Customer[], onOpenReminderModal: (customerId: string | null, reminder?: Reminder) => void, onToggleComplete: (id: string) => void, onDelete: (id: string) => void }> = ({ reminders, customers, onOpenReminderModal, onToggleComplete, onDelete }) => {
     
-    const { upcoming, overdue, today, thisWeek } = useMemo(() => {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const startOfTomorrow = startOfToday + 86400000;
-        const endOfWeek = startOfTomorrow + (6 - now.getDay()) * 86400000;
-        
+    const { highPriority, mediumPriority, lowPriority } = useMemo(() => {
         const activeReminders = reminders.filter(r => !r.completed).sort((a,b) => a.dueDate - b.dueDate);
 
         return {
-            overdue: activeReminders.filter(r => r.dueDate < startOfToday),
-            today: activeReminders.filter(r => r.dueDate >= startOfToday && r.dueDate < startOfTomorrow),
-            thisWeek: activeReminders.filter(r => r.dueDate >= startOfTomorrow && r.dueDate < endOfWeek),
-            upcoming: activeReminders.filter(r => r.dueDate >= endOfWeek),
+            highPriority: activeReminders.filter(r => r.priority === 'high'),
+            mediumPriority: activeReminders.filter(r => r.priority === 'medium'),
+            lowPriority: activeReminders.filter(r => r.priority === 'low'),
         };
     }, [reminders]);
 
@@ -2034,10 +2185,9 @@ const RemindersView: React.FC<{ reminders: Reminder[], customers: Customer[], on
                 </div>
             ) : (
                 <div className="space-y-6">
-                    <ReminderSection title="Quá hạn" reminders={overdue} colorClass="text-red-600" />
-                    <ReminderSection title="Hôm nay" reminders={today} colorClass="text-blue-600" />
-                    <ReminderSection title="Tuần này" reminders={thisWeek} colorClass="text-yellow-600" />
-                    <ReminderSection title="Sắp tới" reminders={upcoming} colorClass="text-gray-600" />
+                    <ReminderSection title="Ưu tiên Cao" reminders={highPriority} colorClass="text-red-600" />
+                    <ReminderSection title="Ưu tiên Trung bình" reminders={mediumPriority} colorClass="text-yellow-600" />
+                    <ReminderSection title="Ưu tiên Thấp" reminders={lowPriority} colorClass="text-gray-600" />
                 </div>
             )}
         </div>

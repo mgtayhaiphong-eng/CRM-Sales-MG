@@ -1,6 +1,9 @@
-import { Role } from './App'; // Adjusted to avoid circular dependency if Role is moved.
 
-export { Role };
+// FIX: Moved Role enum from App.tsx to here to break the circular dependency.
+export enum Role {
+  ADMIN = 'admin',
+  USER = 'user'
+}
 
 export interface User {
   id: string;

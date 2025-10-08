@@ -2,14 +2,12 @@ import { GoogleGenAI } from "@google/genai";
 import type { Customer } from '../types';
 
 // The API key MUST be obtained exclusively from the environment variable `process.env.API_KEY`.
-const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
+if (!process.env.API_KEY) {
     console.error("Gemini API key is not set in environment variables.");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
-const model = "gemini-2.5-flash";
+// FIX: Per @google/genai guidelines, initialize with process.env.API_KEY directly.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 export const GeminiService = {
     generateScript: async (customer: Customer, userName: string): Promise<string> => {
@@ -32,8 +30,9 @@ export const GeminiService = {
             
             Yêu cầu: Kịch bản cần tự nhiên, không máy móc. Bắt đầu bằng lời chào "Chào anh/chị ${customer.name}, em là ${userName || '[Tên của bạn]'} gọi từ MG [Đại lý của bạn]."`;
 
+            // FIX: Per @google/genai guidelines, use the model name directly in the generateContent call.
             const response = await ai.models.generateContent({
-                model,
+                model: "gemini-2.5-flash",
                 contents: prompt,
             });
 
