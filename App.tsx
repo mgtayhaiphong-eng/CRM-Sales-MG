@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, createContext
 import type { User, Customer, Status, CarModel, CustomerSource, Interaction, Reminder, CrmData } from './types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from './constants';
 import { GeminiService } from './services/geminiService';
-import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController } from 'chart.js';
+import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement } from 'chart.js';
 
 // Re-export Role enum here to be self-contained and avoid circular dependencies with types.ts
 export enum Role {
@@ -11,7 +11,7 @@ export enum Role {
 }
 
 // Register Chart.js components
-Chart.register(DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController);
+Chart.register(DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement);
 
 
 // START: MOCK DATA AND SERVICES
@@ -738,35 +738,45 @@ const MainLayout: React.FC = () => {
         saveData({ users, dataByUser: newDataByUser });
     };
 
+    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties. This prevents crashes if user data is unexpectedly missing.
     const handleDeleteCustomer = (customerId: string) => {
         const customer = allCustomers.find(c => c.id === customerId);
         if (!customer) return;
 
         const newDataByUser = { ...dataByUser };
-        const ownerData = { ...newDataByUser[customer.userId] };
-        ownerData.customers = ownerData.customers.filter(c => c.id !== customerId);
-        // Also delete associated reminders
-        ownerData.reminders = ownerData.reminders.filter(r => r.customerId !== customerId);
-        newDataByUser[customer.userId] = ownerData;
+        const ownerData = newDataByUser[customer.userId];
+        if (ownerData) {
+            // FIX: Replaced mutable update with a functional approach to resolve type inference issues.
+            newDataByUser[customer.userId] = {
+                ...ownerData,
+                customers: ownerData.customers.filter(c => c.id !== customerId),
+                // Also delete associated reminders
+                reminders: ownerData.reminders.filter(r => r.customerId !== customerId),
+            };
 
-        setDataByUser(newDataByUser);
-        saveData({ users, dataByUser: newDataByUser });
+            setDataByUser(newDataByUser);
+            saveData({ users, dataByUser: newDataByUser });
+        }
         setDeleteConfirm({ isOpen: false, customerId: '' });
     };
 
+    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleCustomerUpdate = (customerId: string, updates: Partial<Customer>) => {
         const customer = allCustomers.find(c => c.id === customerId);
         if (!customer) return;
 
         const newDataByUser = { ...dataByUser };
-        const ownerData = { ...newDataByUser[customer.userId] };
-        ownerData.customers = ownerData.customers.map(c => 
-            c.id === customerId ? { ...c, ...updates, lastContactDate: Date.now() } : c
-        );
-        newDataByUser[customer.userId] = ownerData;
-        
-        setDataByUser(newDataByUser);
-        saveData({ users, dataByUser: newDataByUser });
+        const ownerData = newDataByUser[customer.userId];
+        if (ownerData) {
+            const updatedOwnerData = { ...ownerData };
+            updatedOwnerData.customers = updatedOwnerData.customers.map(c =>
+                c.id === customerId ? { ...c, ...updates, lastContactDate: Date.now() } : c
+            );
+            newDataByUser[customer.userId] = updatedOwnerData;
+
+            setDataByUser(newDataByUser);
+            saveData({ users, dataByUser: newDataByUser });
+        }
     };
 
     const handleAddInteraction = (customerId: string, interaction: Omit<Interaction, 'id'>) => {
@@ -789,49 +799,61 @@ const MainLayout: React.FC = () => {
         setScriptModal({ isOpen: true, script, isLoading: false });
     };
 
+    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleSaveReminder = (reminderData: Omit<Reminder, 'id' | 'userId'>, existingReminderId?: string) => {
         const ownerId = reminderData.customerId ? allCustomers.find(c => c.id === reminderData.customerId)?.userId : user.id;
         if (!ownerId) return;
 
         const newDataByUser = { ...dataByUser };
-        const ownerData = { ...newDataByUser[ownerId] };
+        const ownerData = newDataByUser[ownerId];
         
-        if (existingReminderId) { // Update
-            ownerData.reminders = ownerData.reminders.map(r => r.id === existingReminderId ? { ...r, ...reminderData } : r);
-        } else { // Create
-            const newReminder: Reminder = { ...reminderData, id: `rem_${Date.now()}`, userId: ownerId };
-            ownerData.reminders = [...ownerData.reminders, newReminder];
-        }
+        if (ownerData) {
+            const updatedOwnerData = { ...ownerData };
+            if (existingReminderId) { // Update
+                updatedOwnerData.reminders = updatedOwnerData.reminders.map(r => r.id === existingReminderId ? { ...r, ...reminderData } : r);
+            } else { // Create
+                const newReminder: Reminder = { ...reminderData, id: `rem_${Date.now()}`, userId: ownerId };
+                updatedOwnerData.reminders = [...updatedOwnerData.reminders, newReminder];
+            }
 
-        newDataByUser[ownerId] = ownerData;
-        setDataByUser(newDataByUser);
-        saveData({ users, dataByUser: newDataByUser });
+            newDataByUser[ownerId] = updatedOwnerData;
+            setDataByUser(newDataByUser);
+            saveData({ users, dataByUser: newDataByUser });
+        }
     };
     
+    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleDeleteReminder = (reminderId: string) => {
         const reminder = allReminders.find(r => r.id === reminderId);
         if (!reminder) return;
 
         const newDataByUser = { ...dataByUser };
-        const ownerData = { ...newDataByUser[reminder.userId] };
-        ownerData.reminders = ownerData.reminders.filter(r => r.id !== reminderId);
-        newDataByUser[reminder.userId] = ownerData;
-        
-        setDataByUser(newDataByUser);
-        saveData({ users, dataByUser: newDataByUser });
+        const ownerData = newDataByUser[reminder.userId];
+        if (ownerData) {
+            const updatedOwnerData = { ...ownerData };
+            updatedOwnerData.reminders = updatedOwnerData.reminders.filter(r => r.id !== reminderId);
+            newDataByUser[reminder.userId] = updatedOwnerData;
+            
+            setDataByUser(newDataByUser);
+            saveData({ users, dataByUser: newDataByUser });
+        }
     };
 
+    // FIX: Add a guard to ensure ownerData exists before attempting to modify its properties.
     const handleToggleReminderComplete = (reminderId: string) => {
         const reminder = allReminders.find(r => r.id === reminderId);
         if (!reminder) return;
         
         const newDataByUser = { ...dataByUser };
-        const ownerData = { ...newDataByUser[reminder.userId] };
-        ownerData.reminders = ownerData.reminders.map(r => r.id === reminderId ? { ...r, completed: !r.completed } : r);
-        newDataByUser[reminder.userId] = ownerData;
+        const ownerData = newDataByUser[reminder.userId];
+        if (ownerData) {
+            const updatedOwnerData = { ...ownerData };
+            updatedOwnerData.reminders = updatedOwnerData.reminders.map(r => r.id === reminderId ? { ...r, completed: !r.completed } : r);
+            newDataByUser[reminder.userId] = updatedOwnerData;
 
-        setDataByUser(newDataByUser);
-        saveData({ users, dataByUser: newDataByUser });
+            setDataByUser(newDataByUser);
+            saveData({ users, dataByUser: newDataByUser });
+        }
     };
 
     const handleSettingsUpdate = (type: 'carModels' | 'customerSources', data: any[]) => {
@@ -1257,6 +1279,77 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
     )
 }
 
+const SalesOverTimeChart: React.FC<{ data: { month: string, revenue: number }[] }> = ({ data }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        let chart: Chart | null = null;
+        if (chartRef.current && data.length > 0) {
+            const chartData = {
+                labels: data.map(d => d.month),
+                datasets: [{
+                    label: 'Doanh số',
+                    data: data.map(d => d.revenue),
+                    fill: true,
+                    borderColor: '#4f46e5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    tension: 0.3,
+                    pointBackgroundColor: '#4f46e5',
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                }]
+            };
+            chart = new Chart(chartRef.current, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `Doanh số: ${formatCurrency(context.parsed.y)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: (value) => {
+                                    if (typeof value === 'number') {
+                                        if (value >= 1e9) return `${value / 1e9}B`;
+                                        if (value >= 1e6) return `${value / 1e6}M`;
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        return () => {
+            chart?.destroy();
+        };
+    }, [data]);
+
+    return (
+         <div className="bg-white p-6 rounded-xl shadow-sm border">
+             <h3 className="text-lg font-semibold mb-4">Doanh số theo Thời gian</h3>
+             <div className="chart-container h-[300px]">
+                {data.length > 0 ? (
+                    <canvas ref={chartRef}></canvas>
+                ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu doanh số.</div>
+                )}
+             </div>
+        </div>
+    );
+};
+
+
 const Dashboard: React.FC<{customers: Customer[], statuses: Status[], reminders: Reminder[], onEditReminder: (rem: Reminder) => void, onToggleComplete: (id: string) => void, onDeleteReminder: (id: string) => void, onOpenCustomer: (customer: Customer) => void }> = ({customers, statuses, reminders, ...reminderHandlers}) => {
     const metrics = useMemo(() => {
         const deliveredCustomers = customers.filter(c => statuses.find(s => s.id === c.statusId)?.type === 'delivered');
@@ -1274,6 +1367,30 @@ const Dashboard: React.FC<{customers: Customer[], statuses: Status[], reminders:
             tierDistribution: CUSTOMER_TIERS.map(tier => ({ label: tier.label, count: customers.filter(c => c.tier === tier.value).length, color: tier.color })),
             statusDistribution: statuses.map(status => ({ name: status.name, count: customers.filter(c => c.statusId === status.id).length, color: status.color})),
         }
+    }, [customers, statuses]);
+
+    const salesOverTime = useMemo(() => {
+        const deliveredStatusId = statuses.find(s => s.type === 'delivered')?.id;
+        if (!deliveredStatusId) return [];
+
+        const salesByMonth: { [key: string]: number } = customers
+            .filter(c => c.statusId === deliveredStatusId)
+            .reduce((acc, curr) => {
+                const date = new Date(curr.lastContactDate);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                acc[monthKey] = (acc[monthKey] || 0) + curr.salesValue;
+                return acc;
+            }, {} as { [key: string]: number });
+
+        return Object.entries(salesByMonth)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([monthKey, revenue]) => {
+                const [year, month] = monthKey.split('-');
+                return {
+                    month: `T${month}/${year}`,
+                    revenue,
+                };
+            });
     }, [customers, statuses]);
 
     const tierChartRef = useRef<HTMLCanvasElement>(null);
@@ -1339,9 +1456,104 @@ const Dashboard: React.FC<{customers: Customer[], statuses: Status[], reminders:
                  <h3 className="text-lg font-semibold mb-4">Khách hàng theo Trạng thái</h3>
                  <div className="chart-container"><canvas ref={statusChartRef}></canvas></div>
             </div>
+            <SalesOverTimeChart data={salesOverTime} />
         </div>
     )
 }
+
+const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        let chart: Chart | null = null;
+        if (chartRef.current && data.length > 0) {
+            const chartData = {
+                labels: data.map(d => d['Dòng xe']),
+                datasets: [{
+                    label: 'Doanh số',
+                    data: data.map(d => d.rawRevenue),
+                    backgroundColor: '#4f46e5',
+                    borderColor: '#4338ca',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            };
+            chart = new Chart(chartRef.current, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    indexAxis: 'y', // Makes it a horizontal bar chart
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                             callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.x !== null) {
+                                        label += formatCurrency(context.parsed.x);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                     if (typeof value === 'number') {
+                                        if (value >= 1e9) return (value / 1e9) + 'B';
+                                        if (value >= 1e6) return (value / 1e6) + 'M';
+                                        if (value >= 1e3) return (value / 1e3) + 'K';
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        return () => {
+            chart?.destroy();
+        };
+    }, [data]);
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Doanh số theo Dòng xe</h3>
+                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
+                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
+                </button>
+            </div>
+            
+            {data.length > 0 ? (
+                <>
+                    <div className="mb-6 chart-container h-[250px]">
+                        <canvas ref={chartRef}></canvas>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>{Object.keys(data[0]).filter(k => k !== 'rawRevenue').map(key => <th key={key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).filter(k => k !== 'rawRevenue').map(key => <td key={key} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            ) : <p className="text-center text-gray-500 py-8">Không có dữ liệu</p>}
+        </div>
+    );
+};
 
 const ReportsView: React.FC<{customers: Customer[], users: User[], statuses: Status[], carModels: CarModel[], customerSources: CustomerSource[]}> = ({ customers, users, statuses, carModels, customerSources }) => {
     const [period, setPeriod] = useState('all');
@@ -1466,7 +1678,7 @@ const ReportsView: React.FC<{customers: Customer[], users: User[], statuses: Sta
             </div>
             <ReportSection title="Hiệu suất theo Nhân viên" data={salesByUser} onExport={() => exportToCsv(salesByUser, 'hieu_suat_nhan_vien.csv')} />
             <ReportSection title="Phân tích Nguồn khách hàng" data={acquisitionBySource} onExport={() => exportToCsv(acquisitionBySource, 'nguon_khach_hang.csv')} />
-            <ReportSection title="Doanh số theo Dòng xe" data={salesByCarModel} onExport={() => exportToCsv(salesByCarModel, 'doanh_so_dong_xe.csv')} />
+            <CarModelSalesReport data={salesByCarModel} onExport={() => exportToCsv(salesByCarModel, 'doanh_so_dong_xe.csv')} />
         </div>
     );
 };
