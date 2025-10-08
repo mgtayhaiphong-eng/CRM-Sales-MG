@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 // FIX: Import `Role` and other types from `types.ts` to break circular dependency.
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData } from './types';
@@ -275,15 +276,17 @@ const ScriptModal: React.FC<ScriptModalProps> = ({ isOpen, isLoading, script, on
 // START: CRM COMPONENTS
 
 interface InteractionHistoryProps {
-    interactions: Interaction[];
+    customer: Customer;
     onAddInteraction: (interaction: Omit<Interaction, 'id'>) => void;
     onDeleteInteraction: (interactionId: string) => void;
     users: User[];
 }
-const InteractionHistory: React.FC<InteractionHistoryProps> = ({ interactions, onAddInteraction, onDeleteInteraction, users }) => {
+const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer, onAddInteraction, onDeleteInteraction, users }) => {
     const { currentUser } = useAuth();
     const [newInteraction, setNewInteraction] = useState({ type: 'call', notes: '', duration: 0, outcome: 'neutral' });
     const [isAdding, setIsAdding] = useState(false);
+    const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+    const { interactions } = customer;
 
     const interactionTypes = [
         { value: 'call', label: '📞 Cuộc gọi', color: 'bg-green-100 text-green-800' },
@@ -309,6 +312,20 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ interactions, o
         setNewInteraction({ type: 'call', notes: '', duration: 0, outcome: 'neutral' });
         setIsAdding(false);
     };
+
+    const handleGenerateScript = async () => {
+        if (!currentUser) return;
+        setIsGeneratingScript(true);
+        try {
+            const script = await GeminiService.generateScript(customer, currentUser.name);
+            setNewInteraction(prev => ({ ...prev, notes: script }));
+        } catch (error) {
+            console.error("Failed to generate script", error);
+            alert("Không thể tạo kịch bản. Vui lòng thử lại.");
+        } finally {
+            setIsGeneratingScript(false);
+        }
+    };
     
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
 
@@ -322,19 +339,33 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ interactions, o
             </div>
 
             {isAdding && (
-                <div className="p-4 border rounded-lg bg-gray-50/70 animate-fade-in-right">
-                    <textarea placeholder="Mô tả..." value={newInteraction.notes} onChange={(e) => setNewInteraction(p => ({ ...p, notes: e.target.value }))} rows={3} className="w-full p-2 border rounded-lg mb-2" />
-                    <div className="grid grid-cols-2 gap-2">
-                        <select value={newInteraction.type} onChange={(e) => setNewInteraction(p => ({ ...p, type: e.target.value }))} className="p-2 border rounded-lg">
-                            {interactionTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
-                        </select>
-                        <select value={newInteraction.outcome} onChange={(e) => setNewInteraction(p => ({ ...p, outcome: e.target.value }))} className="p-2 border rounded-lg">
-                            <option value="positive">✅ Tích cực</option>
-                            <option value="neutral">⚪ Trung lập</option>
-                            <option value="negative">❌ Tiêu cực</option>
-                        </select>
+                <div className="p-4 border rounded-lg bg-gray-50/70 animate-fade-in-right space-y-3">
+                    <textarea placeholder="Mô tả nội dung tương tác..." value={newInteraction.notes} onChange={(e) => setNewInteraction(p => ({ ...p, notes: e.target.value }))} rows={5} className="w-full p-2 border rounded-lg" />
+                    <div className="flex justify-between items-center gap-2">
+                         <button
+                            type="button"
+                            onClick={handleGenerateScript}
+                            disabled={isGeneratingScript}
+                            className="px-3 py-2 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                        >
+                            {isGeneratingScript ? (
+                                <><RefreshCwIcon className="w-4 h-4 mr-2 animate-spin" /> Đang tạo...</>
+                            ) : (
+                                <><SparklesIcon className="w-4 h-4 mr-2" /> Gợi ý AI</>
+                            )}
+                        </button>
+                        <div className="flex-grow grid grid-cols-2 gap-2">
+                            <select value={newInteraction.type} onChange={(e) => setNewInteraction(p => ({ ...p, type: e.target.value }))} className="p-2 border rounded-lg w-full">
+                                {interactionTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
+                            </select>
+                            <select value={newInteraction.outcome} onChange={(e) => setNewInteraction(p => ({ ...p, outcome: e.target.value }))} className="p-2 border rounded-lg w-full">
+                                <option value="positive">✅ Tích cực</option>
+                                <option value="neutral">⚪ Trung lập</option>
+                                <option value="negative">❌ Tiêu cực</option>
+                            </select>
+                        </div>
                     </div>
-                    <div className="flex justify-end space-x-2 mt-2">
+                    <div className="flex justify-end space-x-2 pt-2">
                          <button onClick={() => setIsAdding(false)} className="px-3 py-1 border rounded-lg text-sm">Hủy</button>
                          <button onClick={handleAddInteraction} className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm">Lưu</button>
                     </div>
@@ -348,7 +379,7 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ interactions, o
                         <p>Chưa có tương tác</p>
                     </div>
                 ) : (
-                    interactions.sort((a, b) => b.date - a.date).map(interaction => {
+                    [...interactions].sort((a, b) => b.date - a.date).map(interaction => {
                         const typeConfig = interactionTypes.find(t => t.value === interaction.type);
                         const outcomeIcons = { positive: '✅', neutral: '⚪', negative: '❌' };
                         return (
@@ -450,7 +481,7 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminde
             {showDetails && (
                  <div className="border-t p-4 bg-gray-50/70">
                     <InteractionHistory
-                        interactions={customer.interactions || []}
+                        customer={customer}
                         onAddInteraction={(interaction) => onAddInteraction(customer.id, interaction)}
                         onDeleteInteraction={(interactionId) => onDeleteInteraction(customer.id, interactionId)}
                         users={users}
@@ -1183,6 +1214,64 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
 
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
     
+    const getCellDataForExport = (customer: Customer, columnKey: string): string => {
+        switch (columnKey) {
+            case 'name': return customer.name;
+            case 'phone': return customer.phone;
+            case 'email': return customer.email || '';
+            case 'statusId': return statuses.find(s => s.id === customer.statusId)?.name.replace(/^\d+\.\s/, '') || '---'; // Remove ordering like "1. "
+            case 'salesValue': return String(customer.salesValue);
+            case 'userId': return getUserName(customer.userId);
+            case 'lastContactDate': return customer.lastContactDate ? formatDate(customer.lastContactDate) : '';
+            case 'createdDate': return customer.createdDate ? formatDate(customer.createdDate) : '';
+            case 'carModel': return customer.carModel || '';
+            case 'source': return customer.source || '';
+            case 'city': return customer.city || '';
+            case 'tier': return customer.tier;
+            default: return '';
+        }
+    };
+
+    const handleExportCsv = () => {
+        if (processedCustomers.length === 0) {
+            alert("Không có dữ liệu để xuất.");
+            return;
+        }
+    
+        const columnsToExport = allPossibleColumns.filter(col => visibleColumns.has(col.key));
+    
+        const escapeCsvCell = (cell: string | number) => {
+            const strCell = String(cell);
+            if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
+                return `"${strCell.replace(/"/g, '""')}"`;
+            }
+            return strCell;
+        };
+    
+        const headers = columnsToExport.map(c => c.label).join(',');
+    
+        const rows = processedCustomers.map(customer => {
+            return columnsToExport.map(col => {
+                const cellData = getCellDataForExport(customer, col.key);
+                return escapeCsvCell(cellData);
+            }).join(',');
+        });
+    
+        const csvContent = [headers, ...rows].join('\n');
+        
+        // Add BOM for Excel compatibility with UTF-8
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'danh_sach_khach_hang.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+    
     const renderCellContent = (customer: Customer, columnKey: string) => {
         switch (columnKey) {
             case 'name':
@@ -1249,28 +1338,33 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
                         </div>
                     )}
                 </div>
-                <div className="relative" ref={columnSelectorRef}>
-                    <button onClick={() => setShowColumnSelector(prev => !prev)} className="px-3 py-1.5 border rounded-lg text-sm flex items-center text-gray-600 hover:bg-gray-100">
-                        <SettingsIcon className="w-4 h-4 mr-2"/> Tùy chỉnh cột
+                <div className="flex items-center space-x-2">
+                    <button onClick={handleExportCsv} className="px-3 py-1.5 bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm flex items-center hover:bg-green-200 transition">
+                        <DownloadIcon className="w-4 h-4 mr-2"/> Xuất Excel
                     </button>
-                    {showColumnSelector && (
-                        <div className="absolute top-full right-0 mt-2 w-56 bg-white border rounded-lg shadow-xl z-10 p-2">
-                            <p className="text-xs text-gray-500 px-2 pb-2 border-b">Chọn cột để hiển thị</p>
-                            <div className="mt-2 space-y-1">
-                                {allPossibleColumns.map(col => (
-                                    <label key={col.key} className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                            checked={visibleColumns.has(col.key)}
-                                            onChange={() => handleColumnToggle(col.key)}
-                                        />
-                                        <span className="text-sm text-gray-700">{col.label}</span>
-                                    </label>
-                                ))}
+                    <div className="relative" ref={columnSelectorRef}>
+                        <button onClick={() => setShowColumnSelector(prev => !prev)} className="px-3 py-1.5 border rounded-lg text-sm flex items-center text-gray-600 hover:bg-gray-100">
+                            <SettingsIcon className="w-4 h-4 mr-2"/> Tùy chỉnh cột
+                        </button>
+                        {showColumnSelector && (
+                            <div className="absolute top-full right-0 mt-2 w-56 bg-white border rounded-lg shadow-xl z-10 p-2">
+                                <p className="text-xs text-gray-500 px-2 pb-2 border-b">Chọn cột để hiển thị</p>
+                                <div className="mt-2 space-y-1">
+                                    {allPossibleColumns.map(col => (
+                                        <label key={col.key} className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                checked={visibleColumns.has(col.key)}
+                                                onChange={() => handleColumnToggle(col.key)}
+                                            />
+                                            <span className="text-sm text-gray-700">{col.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
             <div className="overflow-x-auto">
