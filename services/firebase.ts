@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, createContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData, type MarketingSpend } from '../types';
 import { CUSTOMER_TIERS } from '../constants';
 
@@ -135,34 +135,56 @@ interface NotificationContextType {
 }
 export const NotificationContext = createContext<NotificationContextType | null>(null);
 
-interface AuthContextType {
-    currentUser: User | null;
-    login: (username: string, password: string) => Promise<boolean>;
-    logout: () => void;
-}
-export const AuthContext = createContext<AuthContextType | null>(null);
+// FIX: Changed CrmContextType from an invalid interface extension to a type alias.
+type CrmContextType = ReturnType<typeof useCrmDataManager>;
+export const CrmContext = createContext<CrmContextType | null>(null);
+
+export const useCrm = () => {
+    const context = useContext(CrmContext);
+    if (!context) {
+        throw new Error("useCrm must be used within a CrmProvider");
+    }
+    return context;
+};
 // END: CONTEXT DEFINITIONS
 
 
 // START: CUSTOM HOOK for CRM Data Logic
-export const useCrm = (currentUser: User | null, addNotification: (message: string, type: 'success' | 'error') => void) => {
+// FIX: Export useCrmDataManager so it can be used by AuthProvider in another file.
+export const useCrmDataManager = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [crmData, setCrmData] = useState<CrmData>({ customers: [], statuses: [], carModels: [], customerSources: [], reminders: [], salesGoals: [], marketingSpends: [] });
     const [isLoading, setIsLoading] = useState(true);
+
+    // Auth state moved here
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUserId, setSelectedUserId] = useState('all');
     const [selectedCustomerIds, setSelectedCustomerIds] = useState(new Set<string>());
     const [sortConfig, setSortConfig] = useState<{ key: keyof Customer; direction: 'ascending' | 'descending' }>({ key: 'createdDate', direction: 'descending' });
     const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
-    const [theme, setTheme] = useState(() => {
-        if (typeof window !== 'undefined') {
-            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                return 'dark';
-            }
+    const [theme, setTheme] = useState('light');
+
+    const addNotification = useCallback((message: string, type: 'success' | 'error') => {
+        // This function will be provided by NotificationProvider, but we need a placeholder
+        // In a real app, you'd likely use a more robust system that doesn't require passing this down.
+        console.log(`Notification (${type}): ${message}`);
+    }, []);
+
+    useEffect(() => {
+        // Initialize theme from localStorage or system preference
+        const storedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialTheme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+        setTheme(initialTheme);
+
+        // Initialize user from sessionStorage
+        const storedUser = sessionStorage.getItem('currentUser');
+        if (storedUser) {
+            setCurrentUser(JSON.parse(storedUser));
         }
-        return 'light';
-    });
+    }, []);
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -171,14 +193,11 @@ export const useCrm = (currentUser: User | null, addNotification: (message: stri
         } else {
             root.classList.remove('dark');
         }
+        localStorage.setItem('theme', theme);
     }, [theme]);
 
     const toggleTheme = useCallback(() => {
-        setTheme(prevTheme => {
-            const newTheme = prevTheme === 'light' ? 'dark' : 'light';
-            localStorage.setItem('theme', newTheme);
-            return newTheme;
-        });
+        setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
     }, []);
 
     useEffect(() => {
@@ -234,12 +253,23 @@ export const useCrm = (currentUser: User | null, addNotification: (message: stri
         }
     }, [users, crmData, isLoading]);
 
-    const login = async (username: string, password: string): Promise<User | null> => {
+    const login = async (username: string, password: string): Promise<boolean> => {
         const { users: allUsers } = dataService.getData();
-        return allUsers.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password) || null;
+        const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password) || null;
+        if (user) {
+            const userToStore = { ...user };
+            delete userToStore.password;
+            sessionStorage.setItem('currentUser', JSON.stringify(userToStore));
+            setCurrentUser(userToStore);
+            return true;
+        }
+        return false;
     };
     
-    const logout = () => { /* Logic handled by AuthProvider, but placeholder here */ };
+    const logout = () => { 
+        sessionStorage.removeItem('currentUser');
+        setCurrentUser(null);
+    };
 
     // Data Filtering and Processing
     const dashboardCustomers = useMemo(() => {
@@ -370,17 +400,25 @@ export const useCrm = (currentUser: User | null, addNotification: (message: stri
     const clearSelection = useCallback(() => setSelectedCustomerIds(new Set()), []);
 
     return {
+        // Auth
+        currentUser, login, logout, 
+        // Data
         users, setUsers, crmData, setCrmData, isLoading,
-        login, logout,
+        // UI State
         searchTerm, setSearchTerm, selectedUserId, setSelectedUserId, selectedCustomerIds,
         sortConfig, handleSort,
         pagination, setPagination, resetPagination,
+        // Filtered Data
         dashboardCustomers, filteredReminders, filteredCustomers, paginatedCustomers, totalFilteredCustomers,
+        // Handlers
         handleSaveCustomer, handleDelete, handleCustomerUpdate,
         handleAddInteraction, handleDeleteInteraction,
         handleSaveReminder, handleDeleteReminder, handleToggleReminderComplete,
         handleToggleSelectCustomer, handleToggleSelectAll, handleBulkUpdate, clearSelection,
+        // Theme
         theme, toggleTheme,
+        // Layout component
+        addNotification,
     };
 };
 // END: CUSTOM HOOK
