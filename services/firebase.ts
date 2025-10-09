@@ -155,6 +155,31 @@ export const useCrm = (currentUser: User | null, addNotification: (message: stri
     const [selectedCustomerIds, setSelectedCustomerIds] = useState(new Set<string>());
     const [sortConfig, setSortConfig] = useState<{ key: keyof Customer; direction: 'ascending' | 'descending' }>({ key: 'createdDate', direction: 'descending' });
     const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
+    const [theme, setTheme] = useState(() => {
+        if (typeof window !== 'undefined') {
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                return 'dark';
+            }
+        }
+        return 'light';
+    });
+
+    useEffect(() => {
+        const root = window.document.documentElement;
+        if (theme === 'dark') {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
+    }, [theme]);
+
+    const toggleTheme = useCallback(() => {
+        setTheme(prevTheme => {
+            const newTheme = prevTheme === 'light' ? 'dark' : 'light';
+            localStorage.setItem('theme', newTheme);
+            return newTheme;
+        });
+    }, []);
 
     useEffect(() => {
         const { users: loadedUsers, crmData: loadedCrmData } = dataService.getData();
@@ -355,6 +380,7 @@ export const useCrm = (currentUser: User | null, addNotification: (message: stri
         handleAddInteraction, handleDeleteInteraction,
         handleSaveReminder, handleDeleteReminder, handleToggleReminderComplete,
         handleToggleSelectCustomer, handleToggleSelectAll, handleBulkUpdate, clearSelection,
+        theme, toggleTheme,
     };
 };
 // END: CUSTOM HOOK

@@ -53,6 +53,8 @@ export const MenuIcon = ({ className = "w-6 h-6" }) => <Icon className={classNam
 export const FolderPlusIcon = ({ className = "w-12 h-12" }) => <Icon className={className}><path d="M20 12h-8"/><path d="M16 16V8"/><path d="M2 17.6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-2h4l2 2h4a2 2 0 0 1 2 2v2.4"/></Icon>;
 export const BotIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></Icon>;
 export const ChevronsUpDownIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></Icon>;
+export const SunIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></Icon>;
+export const MoonIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></Icon>;
 // END: ICONS
 
 
@@ -71,8 +73,8 @@ const formatDateTime = (timestamp?: number) => timestamp ? new Date(timestamp).t
 export const LoadingSpinner: React.FC = () => (
     <div className="flex justify-center items-center py-8 h-full w-full">
         <div className="flex flex-col items-center">
-            <RefreshCwIcon className="w-8 h-8 animate-spin text-indigo-600" />
-            <span className="ml-2 text-gray-600 mt-2">Đang tải dữ liệu...</span>
+            <RefreshCwIcon className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400" />
+            <span className="ml-2 text-gray-600 dark:text-gray-400 mt-2">Đang tải dữ liệu...</span>
         </div>
     </div>
 );
@@ -91,10 +93,10 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children, 
     };
     return (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex justify-center items-start pt-8 sm:pt-16 p-4 animate-fade-in" onClick={handleBackdropClick}>
-            <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} transform transition-all duration-300`}>
-                <div className="p-5 border-b flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-xl">
-                    <h3 className="text-xl font-bold text-gray-800">{title}</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition"><XIcon className="w-6 h-6" /></button>
+            <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full ${maxWidth} transform transition-all duration-300`}>
+                <div className="p-5 border-b dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-800 z-10 rounded-t-xl">
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{title}</h3>
+                    <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition"><XIcon className="w-6 h-6" /></button>
                 </div>
                 <div className="p-6 max-h-[80vh] overflow-y-auto custom-scrollbar">{children}</div>
             </div>
@@ -113,10 +115,10 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, ti
     <Modal isOpen={isOpen} title={title} onClose={onCancel} maxWidth="max-w-sm">
         <div className="text-center p-4">
             <AlertTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <p className="text-lg font-semibold text-gray-800 mb-2">{title}</p>
-            <p className="text-gray-600 mb-6">{message}</p>
+            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">{title}</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">{message}</p>
             <div className="flex justify-center space-x-4">
-                <button onClick={onCancel} className="px-6 py-2 border rounded-lg text-gray-600 hover:bg-gray-100 transition">Hủy bỏ</button>
+                <button onClick={onCancel} className="px-6 py-2 border dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition">Hủy bỏ</button>
                 <button onClick={onConfirm} className="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition">Xác nhận</button>
             </div>
         </div>
@@ -146,13 +148,13 @@ export const ScriptModal: React.FC<ScriptModalProps> = ({ isOpen, isLoading, scr
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full min-h-[200px]">
                         <SparklesIcon className="w-10 h-10 animate-pulse text-indigo-500" />
-                        <p className="mt-4 text-gray-600">AI đang phân tích và tạo kịch bản...</p>
+                        <p className="mt-4 text-gray-600 dark:text-gray-400">AI đang phân tích và tạo kịch bản...</p>
                     </div>
                 ) : (
                     <>
-                        <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap text-gray-800 border min-h-[150px]">{script}</div>
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg whitespace-pre-wrap text-gray-800 dark:text-gray-200 border dark:border-gray-600 min-h-[150px]">{script}</div>
                         <div className="mt-4 flex justify-end items-center space-x-3">
-                            <button onClick={copyToClipboard} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100 transition">Sao chép</button>
+                            <button onClick={copyToClipboard} className="px-4 py-2 border dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition">Sao chép</button>
                         </div>
                     </>
                 )}
@@ -167,9 +169,9 @@ export const EmptyState: React.FC<{
     message: string;
     action?: React.ReactNode;
 }> = ({ icon, title, message, action }) => (
-    <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed">
-        <div className="text-gray-400 mx-auto mb-4">{icon}</div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">{title}</h3>
+    <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/30 rounded-lg border-2 border-dashed dark:border-gray-700">
+        <div className="text-gray-400 dark:text-gray-500 mx-auto mb-4">{icon}</div>
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-1">{title}</h3>
         <p className="mb-4">{message}</p>
         {action}
     </div>
@@ -192,11 +194,11 @@ export const NotificationToasts: React.FC<NotificationToastProps> = ({ notificat
 
 
 // START: SKELETON COMPONENTS
-const SkeletonBox: React.FC<{className?: string}> = ({ className }) => <div className={`bg-gray-200 rounded ${className} skeleton-pulse`}></div>;
+const SkeletonBox: React.FC<{className?: string}> = ({ className }) => <div className={`bg-gray-200 dark:bg-gray-700 rounded ${className} skeleton-pulse`}></div>;
 
 export const MainLayoutSkeleton: React.FC = () => (
-    <div className="flex h-screen bg-gray-100">
-        <aside className="w-64 flex-shrink-0 hidden lg:block bg-white p-4">
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+        <aside className="w-64 flex-shrink-0 hidden lg:block bg-white dark:bg-gray-800 p-4">
             <SkeletonBox className="h-8 w-3/4 mb-8" />
             <div className="space-y-3">
                 <SkeletonBox className="h-10 w-full" />
@@ -206,7 +208,7 @@ export const MainLayoutSkeleton: React.FC = () => (
             </div>
         </aside>
         <div className="flex-1 flex flex-col overflow-hidden">
-            <header className="h-16 bg-white border-b flex items-center justify-between px-6 flex-shrink-0">
+            <header className="h-16 bg-white dark:bg-gray-800 border-b dark:border-gray-700 flex items-center justify-between px-6 flex-shrink-0">
                 <SkeletonBox className="h-8 w-1/2" />
                 <SkeletonBox className="h-10 w-24" />
             </header>
@@ -247,7 +249,7 @@ const KanbanSkeleton: React.FC = () => (
         <div className="kanban-container overflow-x-auto pb-6">
             <div className="flex space-x-4 min-w-max">
                 {[...Array(4)].map((_, i) => (
-                    <div key={i} className="kanban-column flex-shrink-0 w-80 bg-gray-50 rounded-xl p-3">
+                    <div key={i} className="kanban-column flex-shrink-0 w-80 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3">
                         <SkeletonBox className="h-6 w-3/4 mb-4" />
                         <div className="space-y-3">
                             <SkeletonBox className="h-32" />
@@ -262,7 +264,7 @@ const KanbanSkeleton: React.FC = () => (
 );
 
 const ListViewSkeleton: React.FC = () => (
-    <div className="bg-white rounded-xl shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
         <SkeletonBox className="h-8 w-1/3 mb-4" />
         <div className="overflow-x-auto">
             <table className="w-full">
@@ -275,7 +277,7 @@ const ListViewSkeleton: React.FC = () => (
                 </thead>
                 <tbody>
                     {[...Array(8)].map((_, i) => (
-                        <tr key={i} className="border-b">
+                        <tr key={i} className="border-b dark:border-gray-700">
                              {[...Array(6)].map((_, j) => (
                                 <td key={j} className="px-6 py-4"><SkeletonBox className="h-5 w-full" /></td>
                             ))}
@@ -288,7 +290,7 @@ const ListViewSkeleton: React.FC = () => (
 );
 
 const GenericViewSkeleton: React.FC = () => (
-    <div className="bg-white rounded-xl shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
         <div className="flex justify-between items-center mb-4">
             <SkeletonBox className="h-8 w-1/3" />
             <SkeletonBox className="h-10 w-24" />
@@ -334,12 +336,12 @@ export const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer
     const { interactions } = customer;
 
     const interactionTypes = [
-        { value: 'call', label: '📞 Cuộc gọi', color: 'bg-green-100 text-green-800' },
-        { value: 'email', label: '✉️ Email', color: 'bg-blue-100 text-blue-800' },
-        { value: 'meeting', label: '🤝 Gặp mặt', color: 'bg-purple-100 text-purple-800' },
-        { value: 'test_drive', label: '🚗 Lái thử', color: 'bg-orange-100 text-orange-800' },
-        { value: 'quotation', label: '💰 Báo giá', color: 'bg-indigo-100 text-indigo-800' },
-        { value: 'other', label: '📝 Khác', color: 'bg-gray-100 text-gray-800' }
+        { value: 'call', label: '📞 Cuộc gọi', color: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' },
+        { value: 'email', label: '✉️ Email', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' },
+        { value: 'meeting', label: '🤝 Gặp mặt', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300' },
+        { value: 'test_drive', label: '🚗 Lái thử', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300' },
+        { value: 'quotation', label: '💰 Báo giá', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' },
+        { value: 'other', label: '📝 Khác', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' }
     ];
 
     const getInteractionPlaceholder = (type: string): string => {
@@ -389,31 +391,31 @@ export const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
-                <h4 className="font-semibold text-gray-800">Lịch sử Tương tác ({interactions.length})</h4>
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Lịch sử Tương tác ({interactions.length})</h4>
                 <button onClick={() => setIsAdding(!isAdding)} className="px-3 py-1 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition flex items-center">
                     <PlusIcon className="w-4 h-4 mr-1" /> Thêm
                 </button>
             </div>
 
             {isAdding && (
-                <div className="p-4 border rounded-lg bg-gray-50/70 animate-fade-in-right space-y-3">
+                <div className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50/70 dark:bg-gray-700/30 animate-fade-in-right space-y-3">
                     <textarea 
                         placeholder={getInteractionPlaceholder(newInteraction.type)} 
                         value={newInteraction.notes} 
                         onChange={(e) => setNewInteraction(p => ({ ...p, notes: e.target.value }))} 
                         rows={4} 
-                        className="w-full p-2 border rounded-lg" 
+                        className="w-full p-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500" 
                     />
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs font-medium text-gray-600">Loại</label>
-                            <select value={newInteraction.type} onChange={(e) => setNewInteraction(p => ({ ...p, type: e.target.value }))} className="p-2 border rounded-lg w-full mt-1">
+                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">Loại</label>
+                            <select value={newInteraction.type} onChange={(e) => setNewInteraction(p => ({ ...p, type: e.target.value }))} className="p-2 border dark:border-gray-600 rounded-lg w-full mt-1 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">
                                 {interactionTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-medium text-gray-600">Kết quả</label>
-                            <select value={newInteraction.outcome} onChange={(e) => setNewInteraction(p => ({ ...p, outcome: e.target.value as Interaction['outcome'] }))} className="p-2 border rounded-lg w-full mt-1">
+                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">Kết quả</label>
+                            <select value={newInteraction.outcome} onChange={(e) => setNewInteraction(p => ({ ...p, outcome: e.target.value as Interaction['outcome'] }))} className="p-2 border dark:border-gray-600 rounded-lg w-full mt-1 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">
                                 <option value="positive">✅ Tích cực</option>
                                 <option value="neutral">⚪ Trung lập</option>
                                 <option value="negative">❌ Tiêu cực</option>
@@ -423,12 +425,12 @@ export const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer
 
                     {['call', 'meeting', 'test_drive'].includes(newInteraction.type) && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Thời lượng (phút)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Thời lượng (phút)</label>
                             <input 
                                 type="number"
                                 value={newInteraction.duration}
                                 onChange={(e) => setNewInteraction(p => ({ ...p, duration: parseInt(e.target.value, 10) || 0 }))}
-                                className="w-full p-2 border rounded-lg mt-1"
+                                className="w-full p-2 border dark:border-gray-600 rounded-lg mt-1 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
                                 min="0"
                             />
                         </div>
@@ -439,7 +441,7 @@ export const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer
                             type="button"
                             onClick={handleGenerateScript}
                             disabled={isGeneratingScript}
-                            className="px-3 py-2 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                            className="px-3 py-2 text-sm bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/80 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
                         >
                             {isGeneratingScript ? (
                                 <><RefreshCwIcon className="w-4 h-4 mr-2 animate-spin" /> Đang tạo...</>
@@ -448,7 +450,7 @@ export const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer
                             )}
                         </button>
                         <div className="flex space-x-2">
-                             <button onClick={() => setIsAdding(false)} className="px-4 py-2 border rounded-lg text-sm">Hủy</button>
+                             <button onClick={() => setIsAdding(false)} className="px-4 py-2 border dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Hủy</button>
                              <button onClick={handleAddInteraction} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm flex items-center">
                                  <SaveIcon className="w-4 h-4 mr-2" /> Lưu
                              </button>
@@ -460,7 +462,7 @@ export const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer
 
             <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar pr-2">
                 {interactions.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                         <div className="text-4xl mb-2">📝</div>
                         <p>Chưa có tương tác</p>
                     </div>
@@ -469,19 +471,19 @@ export const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer
                         const typeConfig = interactionTypes.find(t => t.value === interaction.type);
                         const outcomeIcons = { positive: '✅', neutral: '⚪', negative: '❌' };
                         return (
-                            <div key={interaction.id} className="p-3 border rounded-lg bg-white shadow-sm">
+                            <div key={interaction.id} className="p-3 border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center space-x-2">
                                         <span className={`px-2 py-1 text-xs rounded-full ${typeConfig?.color}`}>{typeConfig?.label}</span>
-                                        <span className="text-xs text-gray-500">{formatDateTime(interaction.date)}</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">{formatDateTime(interaction.date)}</span>
                                     </div>
                                     <button aria-label="Xóa tương tác" onClick={() => onDeleteInteraction(interaction.id)} className="text-gray-400 hover:text-red-500"><Trash2Icon className="w-4 h-4"/></button>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <span className="text-lg mt-0.5">{outcomeIcons[interaction.outcome]}</span>
                                     <div className="flex-1">
-                                        <p className="text-sm text-gray-800">{interaction.notes}</p>
-                                        <div className="flex items-center text-xs text-gray-400 mt-1">
+                                        <p className="text-sm text-gray-800 dark:text-gray-300">{interaction.notes}</p>
+                                        <div className="flex items-center text-xs text-gray-400 dark:text-gray-500 mt-1">
                                             <span>bởi: {getUserName(interaction.userId)}</span>
                                             {interaction.duration > 0 && (
                                                  <span className="ml-3 flex items-center"><ClockIcon className="w-3 h-3 mr-1"/> {interaction.duration} phút</span>
@@ -511,7 +513,7 @@ export const Highlight: React.FC<{ text: string | undefined; highlight: string }
         <>
             {parts.map((part, i) =>
                 i % 2 === 1 ? (
-                    <mark key={i} className="bg-yellow-200 p-0 rounded-sm">
+                    <mark key={i} className="bg-yellow-200 dark:bg-yellow-400 dark:text-black p-0 rounded-sm">
                         {part}
                     </mark>
                 ) : (
@@ -545,34 +547,34 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, 
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 hover:shadow-md dark:hover:shadow-indigo-900/30 transition-all duration-200 hover:scale-[1.02]">
             <div className="p-4">
                 <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-lg truncate pr-2 min-w-0"><Highlight text={customer.name} highlight={searchTerm} /></h3>
+                    <h3 className="font-semibold text-lg truncate pr-2 min-w-0 text-gray-900 dark:text-gray-100"><Highlight text={customer.name} highlight={searchTerm} /></h3>
                      <div className="flex items-center space-x-2 flex-shrink-0">
                          {activeReminder && <div className="text-yellow-500" title={`Nhắc hẹn: ${formatDate(activeReminder.dueDate)}`}><BellIcon className="w-4 h-4"/></div>}
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${tierConfig?.color} border border-current`}>{tierConfig?.value}</span>
                     </div>
                 </div>
-                <div className="flex items-center text-sm text-gray-600 mb-4"><PhoneIcon className="w-4 h-4 mr-2" /><Highlight text={customer.phone} highlight={searchTerm} /></div>
-                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-4">
+                <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-4"><PhoneIcon className="w-4 h-4 mr-2" /><Highlight text={customer.phone} highlight={searchTerm} /></div>
+                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
                     <div className="flex items-center"><CarIcon className="w-4 h-4 mr-2" /><span><Highlight text={customer.carModel} highlight={searchTerm} /></span></div>
                     <div className="flex items-center"><LayersIcon className="w-4 h-4 mr-2" /><span><Highlight text={customer.source} highlight={searchTerm} /></span></div>
                 </div>
-                <select value={customer.statusId} onChange={(e) => onStatusChange(customer.id, e.target.value)} className="w-full p-2 border rounded-lg text-sm bg-gray-50">
+                <select value={customer.statusId} onChange={(e) => onStatusChange(customer.id, e.target.value)} className="w-full p-2 border dark:border-gray-600 rounded-lg text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-200">
                     {statuses.sort((a, b) => a.order - b.order).map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
                 </select>
             </div>
             <div className="px-4 pb-4 flex justify-center">
-                <button onClick={() => setShowDetails(!showDetails)} className="flex items-center px-4 py-1.5 text-sm rounded-full border bg-white hover:bg-gray-100 text-gray-700 font-medium transition-colors shadow-sm">
+                <button onClick={() => setShowDetails(!showDetails)} className="flex items-center px-4 py-1.5 text-sm rounded-full border dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium transition-colors shadow-sm">
                     <span>{showDetails ? 'Thu gọn' : 'Xem chi tiết'}</span>
                     {showDetails ? <ChevronUpIcon className="w-4 h-4 ml-2 text-gray-500" /> : <ChevronDownIcon className="w-4 h-4 ml-2 text-gray-500" />}
                 </button>
             </div>
 
             {showDetails && (
-                 <div className="border-t p-4 bg-gray-50/70 animate-fade-in-right">
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm text-gray-700 mb-4 pb-4 border-b">
+                 <div className="border-t dark:border-gray-700 p-4 bg-gray-50/70 dark:bg-gray-900/50 animate-fade-in-right">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm text-gray-700 dark:text-gray-300 mb-4 pb-4 border-b dark:border-gray-700">
                         <div className="flex items-start col-span-1 sm:col-span-2"><MailIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span>{customer.email || 'Chưa có'}</span></div>
                         <div className="flex items-start"><MapPinIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span>{customer.city || 'Chưa có'}</span></div>
                         <div className="flex items-start"><DollarSignIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span>{formatCurrency(customer.salesValue)}</span></div>
@@ -594,11 +596,11 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, 
                 </div>
             )}
             
-            <div className="p-3 border-t bg-gray-50 rounded-b-xl flex justify-end items-center space-x-2">
-                <button aria-label="Đặt lịch hẹn" onClick={() => onOpenReminderModal(customer.id)} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-full transition-colors" title="Đặt lịch hẹn"><BellIcon className="w-5 h-5"/></button>
-                <button aria-label="Tạo kịch bản chăm sóc AI" onClick={() => onGenerateScript(customer)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors" title="Tạo kịch bản chăm sóc AI"><SparklesIcon className="w-5 h-5"/></button>
-                <button aria-label="Chỉnh sửa khách hàng" onClick={() => onCustomerEdit(customer)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="Chỉnh sửa"><Edit2Icon className="w-5 h-5"/></button>
-                <button aria-label="Xóa khách hàng" onClick={() => onDelete([customer.id])} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
+            <div className="p-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl flex justify-end items-center space-x-2">
+                <button aria-label="Đặt lịch hẹn" onClick={() => onOpenReminderModal(customer.id)} className="p-2 text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-500/20 rounded-full transition-colors" title="Đặt lịch hẹn"><BellIcon className="w-5 h-5"/></button>
+                <button aria-label="Tạo kịch bản chăm sóc AI" onClick={() => onGenerateScript(customer)} className="p-2 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 rounded-full transition-colors" title="Tạo kịch bản chăm sóc AI"><SparklesIcon className="w-5 h-5"/></button>
+                <button aria-label="Chỉnh sửa khách hàng" onClick={() => onCustomerEdit(customer)} className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Chỉnh sửa"><Edit2Icon className="w-5 h-5"/></button>
+                <button aria-label="Xóa khách hàng" onClick={() => onDelete([customer.id])} className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-full transition-colors" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
             </div>
         </div>
     );
@@ -654,30 +656,34 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ isOpen, onClose, onS
         if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
     };
 
+    const inputClasses = "w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500";
+    const errorInputClasses = "border-red-500 dark:border-red-500";
+    const labelClasses = "block text-sm font-medium text-gray-700 dark:text-gray-300";
+
     return (
         <Modal isOpen={isOpen} title={customer ? 'Chỉnh sửa Khách hàng' : 'Thêm Khách hàng mới'} onClose={onClose} maxWidth="max-w-2xl">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Tên *</label>
-                        <input type="text" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className={`w-full p-2 border rounded-lg ${errors.name ? 'border-red-500' : 'border-gray-300'}`} />
+                        <label className={labelClasses}>Tên *</label>
+                        <input type="text" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className={`${inputClasses} ${errors.name ? errorInputClasses : 'border-gray-300'}`} />
                         {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700">SĐT *</label>
-                        <input type="tel" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className={`w-full p-2 border rounded-lg ${errors.phone ? 'border-red-500' : 'border-gray-300'}`} />
+                        <label className={labelClasses}>SĐT *</label>
+                        <input type="tel" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className={`${inputClasses} ${errors.phone ? errorInputClasses : 'border-gray-300'}`} />
                         {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                     </div>
                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Email</label>
-                        <input type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className={`w-full p-2 border rounded-lg ${errors.email ? 'border-red-500' : 'border-gray-300'}`} />
+                        <label className={labelClasses}>Email</label>
+                        <input type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className={`${inputClasses} ${errors.email ? errorInputClasses : 'border-gray-300'}`} />
                          {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Thành phố</label>
-                         <select value={formData.city} onChange={(e) => handleChange('city', e.target.value)} className="w-full p-2 border rounded-lg border-gray-300">
+                        <label className={labelClasses}>Thành phố</label>
+                         <select value={formData.city} onChange={(e) => handleChange('city', e.target.value)} className={`${inputClasses} border-gray-300`}>
                              <option value="">Chọn TP</option>
                             {VIETNAM_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                          </select>
@@ -685,15 +691,15 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ isOpen, onClose, onS
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Dòng xe</label>
-                        <select value={formData.carModel} onChange={(e) => handleChange('carModel', e.target.value)} className="w-full p-2 border rounded-lg border-gray-300">
+                        <label className={labelClasses}>Dòng xe</label>
+                        <select value={formData.carModel} onChange={(e) => handleChange('carModel', e.target.value)} className={`${inputClasses} border-gray-300`}>
                              <option value="">Chọn xe</option>
                              {carModels.map(model => <option key={model.id} value={model.name}>{model.name}</option>)}
                          </select>
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Nguồn</label>
-                         <select value={formData.source} onChange={(e) => handleChange('source', e.target.value)} className="w-full p-2 border rounded-lg border-gray-300">
+                        <label className={labelClasses}>Nguồn</label>
+                         <select value={formData.source} onChange={(e) => handleChange('source', e.target.value)} className={`${inputClasses} border-gray-300`}>
                              <option value="">Chọn nguồn</option>
                              {customerSources.map(source => <option key={source.id} value={source.name}>{source.name}</option>)}
                          </select>
@@ -701,28 +707,28 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ isOpen, onClose, onS
                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Trạng thái</label>
-                        <select value={formData.statusId} onChange={(e) => handleChange('statusId', e.target.value)} className="w-full p-2 border rounded-lg border-gray-300">
+                        <label className={labelClasses}>Trạng thái</label>
+                        <select value={formData.statusId} onChange={(e) => handleChange('statusId', e.target.value)} className={`${inputClasses} border-gray-300`}>
                              {statuses.sort((a,b) => a.order - b.order).map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
                          </select>
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Phân loại</label>
-                         <select value={formData.tier} onChange={(e) => handleChange('tier', e.target.value as Customer['tier'])} className="w-full p-2 border rounded-lg border-gray-300">
+                        <label className={labelClasses}>Phân loại</label>
+                         <select value={formData.tier} onChange={(e) => handleChange('tier', e.target.value as Customer['tier'])} className={`${inputClasses} border-gray-300`}>
                               {CUSTOMER_TIERS.map(tier => <option key={tier.value} value={tier.value}>{tier.label}</option>)}
                          </select>
                     </div>
                 </div>
                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Giá trị (VNĐ)</label>
-                    <input type="number" value={formData.salesValue} onChange={(e) => handleChange('salesValue', e.target.value)} className="w-full p-2 border rounded-lg border-gray-300" min="0" />
+                    <label className={labelClasses}>Giá trị (VNĐ)</label>
+                    <input type="number" value={formData.salesValue} onChange={(e) => handleChange('salesValue', e.target.value)} className={`${inputClasses} border-gray-300`} min="0" />
                 </div>
                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
-                    <textarea value={formData.notes} onChange={(e) => handleChange('notes', e.target.value)} rows={3} className="w-full p-2 border rounded-lg border-gray-300" />
+                    <label className={labelClasses}>Ghi chú</label>
+                    <textarea value={formData.notes} onChange={(e) => handleChange('notes', e.target.value)} rows={3} className={`${inputClasses} border-gray-300`} />
                 </div>
-                <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
-                    <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100">Hủy</button>
+                <div className="flex justify-end space-x-3 pt-4 border-t dark:border-gray-700 mt-6">
+                    <button type="button" onClick={onClose} className="px-4 py-2 border dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Hủy</button>
                     <button type="submit" className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 flex items-center">
                         <SaveIcon className="w-4 h-4 mr-2" /> {customer ? 'Cập nhật' : 'Lưu'}
                     </button>
@@ -786,15 +792,15 @@ export const KanbanView: React.FC<Omit<React.ComponentProps<typeof CustomerCard>
     return (
         <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-bold text-gray-800">Pipeline Bán hàng</h2>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">Pipeline Bán hàng</h2>
                 {currentUser?.role === Role.ADMIN && (
                     <div>
-                        <label htmlFor="user-filter-kanban" className="text-sm font-medium mr-2">NV Sales:</label>
+                        <label htmlFor="user-filter-kanban" className="text-sm font-medium mr-2 dark:text-gray-300">NV Sales:</label>
                         <select
                             id="user-filter-kanban"
                             value={selectedUserId}
                             onChange={e => onSelectedUserChange(e.target.value)}
-                            className="p-2 border rounded-lg bg-gray-50"
+                            className="p-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-gray-200"
                         >
                             <option value="all">Tất cả</option>
                             {users.filter(u => u.role === Role.USER).map(user => (
@@ -807,13 +813,13 @@ export const KanbanView: React.FC<Omit<React.ComponentProps<typeof CustomerCard>
             <div className="kanban-container overflow-x-auto pb-6">
                 <div className="flex space-x-4 min-w-max">
                      {currentUser?.role === Role.ADMIN && (
-                        <div className="kanban-column flex-shrink-0 w-80 bg-gray-200/50 rounded-xl p-3 border-2 border-dashed border-gray-400">
+                        <div className="kanban-column flex-shrink-0 w-80 bg-gray-200/50 dark:bg-gray-800/50 rounded-xl p-3 border-2 border-dashed border-gray-400 dark:border-gray-600">
                             <div className="flex justify-between items-center mb-4 px-1">
-                                <h3 className="font-semibold flex items-center text-gray-800">
+                                <h3 className="font-semibold flex items-center text-gray-800 dark:text-gray-200">
                                     <UserCircleIcon className="w-5 h-5 mr-2 text-gray-500" />
                                     Chưa phân công
                                 </h3>
-                                <span className="bg-gray-300 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">{unassignedCustomers.length}</span>
+                                <span className="bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 px-2 py-1 rounded-full text-xs font-medium">{unassignedCustomers.length}</span>
                             </div>
                              <div className="space-y-3 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar pr-1">
                                  {unassignedCustomers.length > 0 ? unassignedCustomers.map(customer => (
@@ -822,20 +828,20 @@ export const KanbanView: React.FC<Omit<React.ComponentProps<typeof CustomerCard>
                                             customer={customer} statuses={statuses} reminders={reminders} onCustomerEdit={onCustomerEdit} onDelete={(ids) => onDelete(ids)} onStatusChange={ (id, newStatus) => onCustomerUpdate(id, {statusId: newStatus}) } onAddInteraction={onAddInteraction} onDeleteInteraction={onDeleteInteraction} onGenerateScript={onGenerateScript} onOpenReminderModal={onOpenReminderModal} users={users} searchTerm={searchTerm} currentUser={currentUser} addNotification={addNotification} />
                                     </div>
                                 )) : (
-                                    <div className="p-4 text-center text-sm text-gray-500 rounded-lg h-full flex items-center justify-center">Không có khách hàng mới.</div>
+                                    <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 rounded-lg h-full flex items-center justify-center">Không có khách hàng mới.</div>
                                 )}
                             </div>
                         </div>
                     )}
 
                     {statuses.sort((a, b) => a.order - b.order).map(status => (
-                        <div key={status.id} className="kanban-column flex-shrink-0 w-80 bg-gray-50 rounded-xl p-3" onDrop={(e) => handleDrop(e, status.id)} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
+                        <div key={status.id} className="kanban-column flex-shrink-0 w-80 bg-gray-50 dark:bg-gray-900/70 rounded-xl p-3" onDrop={(e) => handleDrop(e, status.id)} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
                              <div className="flex justify-between items-center mb-4 px-1">
-                                <h3 className="font-semibold flex items-center text-gray-800">
+                                <h3 className="font-semibold flex items-center text-gray-800 dark:text-gray-200">
                                     <span className={`w-3 h-3 rounded-full mr-2`} style={{ backgroundColor: status.color }}></span>
                                     {status.name}
                                 </h3>
-                                <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">{customersByStatus[status.id]?.length || 0}</span>
+                                <span className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-2 py-1 rounded-full text-xs font-medium">{customersByStatus[status.id]?.length || 0}</span>
                             </div>
                             <div className="space-y-3 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar pr-1">
                                  {customersByStatus[status.id]?.length > 0 ? customersByStatus[status.id]?.map(customer => (
@@ -844,7 +850,7 @@ export const KanbanView: React.FC<Omit<React.ComponentProps<typeof CustomerCard>
                                             customer={customer} statuses={statuses} reminders={reminders} onCustomerEdit={onCustomerEdit} onDelete={(ids) => onDelete(ids)} onStatusChange={ (id, newStatus) => onCustomerUpdate(id, {statusId: newStatus}) } onAddInteraction={onAddInteraction} onDeleteInteraction={onDeleteInteraction} onGenerateScript={onGenerateScript} onOpenReminderModal={onOpenReminderModal} users={users} searchTerm={searchTerm} currentUser={currentUser} addNotification={addNotification}/>
                                     </div>
                                 )) : (
-                                    <div className="p-4 text-center text-sm text-gray-500 border-2 border-dashed rounded-lg">Kéo khách hàng vào đây</div>
+                                    <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 border-2 border-dashed dark:border-gray-700 rounded-lg">Kéo khách hàng vào đây</div>
                                 )}
                             </div>
                         </div>
@@ -924,13 +930,13 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({ currentPage, to
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
     return (
-        <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-sm text-gray-600">
+        <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-sm text-gray-600 dark:text-gray-400">
             <div className="flex items-center mb-2 sm:mb-0">
                 <span className="mr-2">Hiển thị</span>
                 <select 
                     value={itemsPerPage} 
                     onChange={e => onItemsPerPageChange(Number(e.target.value))}
-                    className="p-1 border rounded-md"
+                    className="p-1 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
                 >
                     <option value={10}>10</option>
                     <option value={20}>20</option>
@@ -944,14 +950,14 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({ currentPage, to
                     <button 
                         onClick={() => onPageChange(currentPage - 1)} 
                         disabled={currentPage === 1}
-                        className="px-3 py-1 border rounded-l-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        className="px-3 py-1 border dark:border-gray-600 rounded-l-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                         Trước
                     </button>
                     <button 
                         onClick={() => onPageChange(currentPage + 1)} 
                         disabled={currentPage === totalPages}
-                        className="px-3 py-1 border-t border-b border-r rounded-r-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        className="px-3 py-1 border-t border-b border-r dark:border-gray-600 rounded-r-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                         Sau
                     </button>
@@ -1015,13 +1021,13 @@ export const ListView: React.FC<ListViewProps> = ({ customers, totalCustomers, s
     }, [customers, selectedCustomerIds]);
 
     return (
-        <div className="bg-white rounded-xl shadow p-4 sm:p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-bold text-gray-800">Danh sách Khách hàng ({totalCustomers})</h2>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">Danh sách Khách hàng ({totalCustomers})</h2>
                 {currentUser.role === Role.ADMIN && (
                     <div>
-                        <label htmlFor="user-filter" className="text-sm font-medium mr-2">NV Sales:</label>
-                        <select id="user-filter" value={selectedUserId} onChange={e => onSelectedUserChange(e.target.value)} className="p-2 border rounded-lg bg-gray-50">
+                        <label htmlFor="user-filter" className="text-sm font-medium mr-2 dark:text-gray-300">NV Sales:</label>
+                        <select id="user-filter" value={selectedUserId} onChange={e => onSelectedUserChange(e.target.value)} className="p-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-gray-200">
                             <option value="all">Tất cả</option>
                             {users.filter(u => u.role === Role.USER).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                         </select>
@@ -1029,13 +1035,13 @@ export const ListView: React.FC<ListViewProps> = ({ customers, totalCustomers, s
                 )}
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead className="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-50 dark:bg-gray-700/50">
                         <tr>
                             <th scope="col" className="p-4">
                                 <input 
                                     type="checkbox" 
-                                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500"
+                                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                                     checked={areAllSelected}
                                     onChange={onToggleSelectAll}
                                 />
@@ -1055,16 +1061,16 @@ export const ListView: React.FC<ListViewProps> = ({ customers, totalCustomers, s
                             const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
                             const status = statuses.find(s => s.id === customer.statusId);
                             return (
-                                <tr key={customer.id} className={`bg-white border-b hover:bg-gray-50 transition-colors ${selectedCustomerIds.has(customer.id) ? 'bg-indigo-50' : ''}`}>
+                                <tr key={customer.id} className={`bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${selectedCustomerIds.has(customer.id) ? 'bg-indigo-50 dark:bg-indigo-900/50' : ''}`}>
                                     <td className="w-4 p-4">
                                         <input 
                                             type="checkbox"
-                                            className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500"
+                                            className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                                             checked={selectedCustomerIds.has(customer.id)}
                                             onChange={() => onToggleSelectCustomer(customer.id)}
                                         />
                                     </td>
-                                    <td className="px-6 py-4 font-medium text-gray-900"><Highlight text={customer.name} highlight={searchTerm} /></td>
+                                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white"><Highlight text={customer.name} highlight={searchTerm} /></td>
                                     <td className="px-6 py-4 hidden md:table-cell"><Highlight text={customer.phone} highlight={searchTerm} /></td>
                                     <td className="px-6 py-4">
                                         {status ? (
@@ -1084,9 +1090,9 @@ export const ListView: React.FC<ListViewProps> = ({ customers, totalCustomers, s
                                     <td className="px-6 py-4 hidden lg:table-cell">{formatDate(customer.createdDate)}</td>
                                     {currentUser.role === Role.ADMIN && <td className="px-6 py-4 hidden lg:table-cell">{getUserName(customer.userId as string)}</td>}
                                     <td className="px-6 py-4 text-right whitespace-nowrap">
-                                        <button aria-label="Tạo kịch bản AI" onClick={() => onGenerateScript(customer)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors" title="Tạo kịch bản"><SparklesIcon className="w-5 h-5"/></button>
-                                        <button aria-label="Chỉnh sửa" onClick={() => onCustomerEdit(customer)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="Chỉnh sửa"><Edit2Icon className="w-5 h-5"/></button>
-                                        <button aria-label="Xóa" onClick={() => onCustomerDelete([customer.id])} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
+                                        <button aria-label="Tạo kịch bản AI" onClick={() => onGenerateScript(customer)} className="p-2 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 rounded-full transition-colors" title="Tạo kịch bản"><SparklesIcon className="w-5 h-5"/></button>
+                                        <button aria-label="Chỉnh sửa" onClick={() => onCustomerEdit(customer)} className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors" title="Chỉnh sửa"><Edit2Icon className="w-5 h-5"/></button>
+                                        <button aria-label="Xóa" onClick={() => onCustomerDelete([customer.id])} className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-full transition-colors" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
                                     </td>
                                 </tr>
                             )
@@ -1094,7 +1100,7 @@ export const ListView: React.FC<ListViewProps> = ({ customers, totalCustomers, s
                     </tbody>
                 </table>
                  {totalCustomers === 0 && (
-                    <div className="border-t">
+                    <div className="border-t dark:border-gray-700">
                         <EmptyState 
                             icon={<UsersIcon className="w-12 h-12"/>}
                             title="Chưa có khách hàng nào"
@@ -1124,7 +1130,8 @@ export const Dashboard: React.FC<{
     onToggleComplete: (id: string) => void,
     onDeleteReminder: (id: string) => void,
     onOpenCustomer: (customer: Customer) => void,
-}> = ({ customers, statuses, reminders, onEditReminder, onToggleComplete, onDeleteReminder, onOpenCustomer }) => {
+    theme: string,
+}> = ({ customers, statuses, reminders, onEditReminder, onToggleComplete, onDeleteReminder, onOpenCustomer, theme }) => {
     
     const stats = useMemo(() => {
         const deliveredStatusIds = statuses.filter(s => s.type === 'delivered').map(s => s.id);
@@ -1149,7 +1156,7 @@ export const Dashboard: React.FC<{
 
     return (
         <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-gray-800">Tổng quan</h1>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Tổng quan</h1>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                  <StatCard title="Doanh thu tháng" value={formatCurrency(stats.totalRevenue)} icon={<DollarSignIcon />} />
                  <StatCard title="Xe đã bán" value={stats.carsSold.toString()} icon={<TrendingUpIcon />} />
@@ -1157,21 +1164,21 @@ export const Dashboard: React.FC<{
                  <StatCard title="Tỷ lệ chuyển đổi" value={stats.conversionRate} icon={<TargetIcon />} />
             </div>
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
-                    <h3 className="font-bold text-lg mb-4">Hoạt động Bán hàng (30 ngày qua)</h3>
+                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                    <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-200">Hoạt động Bán hàng (30 ngày qua)</h3>
                      <div className="chart-container">
-                        <SalesOverTimeChart customers={customers} statuses={statuses} />
+                        <SalesOverTimeChart customers={customers} statuses={statuses} theme={theme} />
                     </div>
                 </div>
-                <div className="bg-white rounded-xl shadow p-6">
-                    <h3 className="font-bold text-lg mb-4">Phân bổ Pipeline</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                    <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-200">Phân bổ Pipeline</h3>
                      <div className="chart-container">
-                        <PipelineDistributionChart customers={customers} statuses={statuses} />
+                        <PipelineDistributionChart customers={customers} statuses={statuses} theme={theme} />
                     </div>
                 </div>
             </div>
-            <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="font-bold text-lg mb-4">Nhắc hẹn sắp tới</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                <h3 className="font-bold text-lg mb-4 text-gray-800 dark:text-gray-200">Nhắc hẹn sắp tới</h3>
                 <UpcomingReminders reminders={reminders} customers={customers} onEdit={onEditReminder} onToggleComplete={onToggleComplete} onDelete={onDeleteReminder} onOpenCustomer={onOpenCustomer} />
             </div>
         </div>
@@ -1179,18 +1186,18 @@ export const Dashboard: React.FC<{
 };
 
 const StatCard: React.FC<{title: string, value: string, icon: React.ReactNode}> = ({ title, value, icon }) => (
-    <div className="bg-white rounded-xl shadow p-6 flex items-center transition-transform duration-200 hover:scale-105">
-        <div className="p-3 bg-indigo-100 rounded-full text-indigo-600 mr-4">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 flex items-center transition-transform duration-200 hover:scale-105">
+        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-full text-indigo-600 dark:text-indigo-300 mr-4">
             {icon}
         </div>
         <div>
-            <p className="text-sm text-gray-500">{title}</p>
-            <p className="text-2xl font-bold text-gray-800">{value}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{value}</p>
         </div>
     </div>
 );
 
-const SalesOverTimeChart: React.FC<{customers: Customer[], statuses: Status[]}> = ({ customers, statuses }) => {
+const SalesOverTimeChart: React.FC<{customers: Customer[], statuses: Status[], theme: string}> = ({ customers, statuses, theme }) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstance = useRef<Chart | null>(null);
 
@@ -1222,6 +1229,9 @@ const SalesOverTimeChart: React.FC<{customers: Customer[], statuses: Status[]}> 
         
         if (chartInstance.current) chartInstance.current.destroy();
 
+        const textColor = theme === 'dark' ? '#94a3b8' : '#64748b'; // slate-400, slate-500
+        const gridColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+
         chartInstance.current = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1239,8 +1249,15 @@ const SalesOverTimeChart: React.FC<{customers: Customer[], statuses: Status[]}> 
                 responsive: true,
                 maintainAspectRatio: false,
                  scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1 } },
-                    x: { grid: { display: false } }
+                    y: { 
+                        beginAtZero: true, 
+                        ticks: { stepSize: 1, color: textColor },
+                        grid: { color: gridColor }
+                    },
+                    x: { 
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    }
                 },
                 plugins: { legend: { display: false } }
             }
@@ -1248,13 +1265,13 @@ const SalesOverTimeChart: React.FC<{customers: Customer[], statuses: Status[]}> 
         
          return () => { if (chartInstance.current) chartInstance.current.destroy(); };
 
-    }, [customers, statuses]);
+    }, [customers, statuses, theme]);
 
     return <canvas ref={chartRef} />;
 };
 
 
-const PipelineDistributionChart: React.FC<{customers: Customer[], statuses: Status[]}> = ({ customers, statuses }) => {
+const PipelineDistributionChart: React.FC<{customers: Customer[], statuses: Status[], theme: string}> = ({ customers, statuses, theme }) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstance = useRef<Chart | null>(null);
 
@@ -1270,6 +1287,8 @@ const PipelineDistributionChart: React.FC<{customers: Customer[], statuses: Stat
         if (!ctx) return;
 
          if (chartInstance.current) chartInstance.current.destroy();
+         
+        const textColor = theme === 'dark' ? '#e2e8f0' : '#334155'; // slate-200, slate-700
 
         chartInstance.current = new Chart(ctx, {
             type: 'doughnut',
@@ -1279,15 +1298,29 @@ const PipelineDistributionChart: React.FC<{customers: Customer[], statuses: Stat
                     label: 'Số lượng KH',
                     data,
                     backgroundColor: colors,
-                    hoverOffset: 4
+                    hoverOffset: 4,
+                    borderColor: theme === 'dark' ? '#1f2937' : '#ffffff'
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15 } } } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { 
+                            boxWidth: 12, 
+                            padding: 15,
+                            color: textColor
+                        } 
+                    } 
+                } 
+            }
         });
         
         return () => { if (chartInstance.current) chartInstance.current.destroy(); };
 
-    }, [customers, statuses]);
+    }, [customers, statuses, theme]);
 
     return <canvas ref={chartRef} />;
 };
@@ -1322,26 +1355,26 @@ const UpcomingReminders: React.FC<{
             {upcoming.map(reminder => {
                 const customer = getCustomer(reminder.customerId);
                 return (
-                    <div key={reminder.id} className="p-3 border rounded-lg flex items-center justify-between hover:bg-gray-50 transition">
+                    <div key={reminder.id} className="p-3 border dark:border-gray-700 rounded-lg flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                         <div className="flex items-center">
-                             <button aria-label="Đánh dấu hoàn thành" onClick={() => onToggleComplete(reminder.id)} className="mr-4 text-gray-300 hover:text-green-500">
+                             <button aria-label="Đánh dấu hoàn thành" onClick={() => onToggleComplete(reminder.id)} className="mr-4 text-gray-300 dark:text-gray-600 hover:text-green-500">
                                  <div className="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center"></div>
                              </button>
                              <div>
-                                <p className={`font-semibold flex items-center ${isOverdue(reminder.dueDate) ? 'text-red-600' : 'text-gray-800'}`}>
+                                <p className={`font-semibold flex items-center ${isOverdue(reminder.dueDate) ? 'text-red-600' : 'text-gray-800 dark:text-gray-200'}`}>
                                     {reminder.title}
-                                    {reminder.isAuto && <span title="Nhắc hẹn tự động" className="ml-2 text-indigo-500"><BotIcon className="w-4 h-4"/></span>}
+                                    {reminder.isAuto && <span title="Nhắc hẹn tự động" className="ml-2 text-indigo-500 dark:text-indigo-400"><BotIcon className="w-4 h-4"/></span>}
                                 </p>
-                                 <p className="text-sm text-gray-500">
+                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                      {customer ? <button onClick={() => customer && onOpenCustomer(customer)} className="hover:underline">{customer.name}</button> : '...'} -
-                                     <span className={`ml-1 font-medium ${isOverdue(reminder.dueDate) ? 'text-red-500' : 'text-gray-600'}`}>{formatDate(reminder.dueDate)}</span>
+                                     <span className={`ml-1 font-medium ${isOverdue(reminder.dueDate) ? 'text-red-500' : 'text-gray-600 dark:text-gray-300'}`}>{formatDate(reminder.dueDate)}</span>
                                  </p>
                              </div>
                         </div>
                          <div className="flex items-center space-x-1">
-                             <span className={`px-2 py-1 text-xs rounded-full ${reminder.priority === 'high' ? 'bg-red-100 text-red-800' : reminder.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{reminder.priority}</span>
-                             <button aria-label="Chỉnh sửa nhắc hẹn" onClick={() => onEdit(reminder)} className="p-2 text-gray-400 hover:text-indigo-600 rounded-full"><Edit2Icon className="w-4 h-4" /></button>
-                             <button aria-label="Xóa nhắc hẹn" onClick={() => onDelete(reminder.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-full"><Trash2Icon className="w-4 h-4" /></button>
+                             <span className={`px-2 py-1 text-xs rounded-full ${reminder.priority === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' : reminder.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'}`}>{reminder.priority}</span>
+                             <button aria-label="Chỉnh sửa nhắc hẹn" onClick={() => onEdit(reminder)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full"><Edit2Icon className="w-4 h-4" /></button>
+                             <button aria-label="Xóa nhắc hẹn" onClick={() => onDelete(reminder.id)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 rounded-full"><Trash2Icon className="w-4 h-4" /></button>
                         </div>
                     </div>
                 )
@@ -1350,7 +1383,7 @@ const UpcomingReminders: React.FC<{
     );
 };
 
-export const ReportsView: React.FC<{crmData: CrmData, users: User[]}> = ({crmData, users}) => {
+export const ReportsView: React.FC<{crmData: CrmData, users: User[], theme: string}> = ({crmData, users, theme}) => {
     
     const exportToCSV = (data: any[], filename: string) => {
         if (data.length === 0) return;
@@ -1377,22 +1410,22 @@ export const ReportsView: React.FC<{crmData: CrmData, users: User[]}> = ({crmDat
     
     return (
         <div className="space-y-6">
-             <h1 className="text-2xl font-bold text-gray-800">Báo cáo & Phân tích</h1>
+             <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Báo cáo & Phân tích</h1>
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <EmployeeSalesReport crmData={crmData} users={users} onExport={exportToCSV} />
-                 <CarModelPerformanceReport crmData={crmData} onExport={exportToCSV} />
-                 <LeadSourceReport crmData={crmData} onExport={exportToCSV} />
-                 <CacLtvReport crmData={crmData} onExport={exportToCSV} />
+                 <EmployeeSalesReport crmData={crmData} users={users} onExport={exportToCSV} theme={theme} />
+                 <CarModelPerformanceReport crmData={crmData} onExport={exportToCSV} theme={theme} />
+                 <LeadSourceReport crmData={crmData} onExport={exportToCSV} theme={theme} />
+                 <CacLtvReport crmData={crmData} onExport={exportToCSV} theme={theme} />
             </div>
         </div>
     )
 };
 
 const ReportCard: React.FC<{title: string, onExport: () => void, children: React.ReactNode}> = ({ title, onExport, children }) => (
-    <div className="bg-white rounded-xl shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
         <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-lg text-gray-800">{title}</h3>
-             <button onClick={onExport} className="px-3 py-1.5 text-xs border rounded-lg flex items-center hover:bg-gray-100">
+            <h3 className="font-bold text-lg text-gray-800 dark:text-gray-200">{title}</h3>
+             <button onClick={onExport} className="px-3 py-1.5 text-xs border dark:border-gray-600 rounded-lg flex items-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <DownloadIcon className="w-3 h-3 mr-1.5" /> Xuất CSV
             </button>
         </div>
@@ -1400,7 +1433,7 @@ const ReportCard: React.FC<{title: string, onExport: () => void, children: React
     </div>
 );
 
-const EmployeeSalesReport: React.FC<{crmData: CrmData, users: User[], onExport: (data: any[], filename: string) => void}> = ({crmData, users, onExport}) => {
+const EmployeeSalesReport: React.FC<{crmData: CrmData, users: User[], onExport: (data: any[], filename: string) => void, theme: string}> = ({crmData, users, onExport, theme}) => {
     const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
     const salesUsers = users.filter(u => u.role === Role.USER);
     
@@ -1435,12 +1468,12 @@ const EmployeeSalesReport: React.FC<{crmData: CrmData, users: User[], onExport: 
         <ReportCard title="Hiệu suất bán hàng theo nhân viên" onExport={() => onExport(reportData, 'employee_sales_report')}>
             <div className="space-y-4">
                 <div className="chart-container h-64">
-                    <BarChart data={chartData} options={{ indexAxis: 'y', plugins: { legend: { display: false } } }} />
+                    <BarChart data={chartData} options={{ indexAxis: 'y', plugins: { legend: { display: false } } }} theme={theme} />
                 </div>
                 <div className="overflow-x-auto max-h-60 custom-scrollbar">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
-                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 1 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
+                    <table className="w-full text-sm text-gray-700 dark:text-gray-300">
+                        <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600 dark:text-gray-300">{h}</th>)}</tr></thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">{reportData.map((row, i) => <tr key={i}>{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 1 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
                     </table>
                 </div>
             </div>
@@ -1449,7 +1482,7 @@ const EmployeeSalesReport: React.FC<{crmData: CrmData, users: User[], onExport: 
 };
 
 
-const CarModelPerformanceReport: React.FC<{crmData: CrmData, onExport: (data: any[], filename: string) => void}> = ({crmData, onExport}) => {
+const CarModelPerformanceReport: React.FC<{crmData: CrmData, onExport: (data: any[], filename: string) => void, theme: string}> = ({crmData, onExport, theme}) => {
     const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
     
     const reportData = useMemo(() => {
@@ -1490,12 +1523,12 @@ const CarModelPerformanceReport: React.FC<{crmData: CrmData, onExport: (data: an
         <ReportCard title="Hiệu suất theo Dòng xe" onExport={() => onExport(reportData, 'carmodel_performance_report')}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                  <div className="chart-container h-64">
-                    <PieChart data={chartData} />
+                    <PieChart data={chartData} theme={theme} />
                 </div>
                  <div className="overflow-x-auto max-h-60 custom-scrollbar">
-                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
-                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 2 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
+                     <table className="w-full text-sm text-gray-700 dark:text-gray-300">
+                        <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600 dark:text-gray-300">{h}</th>)}</tr></thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">{reportData.map((row, i) => <tr key={i}>{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 2 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
                     </table>
                 </div>
             </div>
@@ -1503,7 +1536,7 @@ const CarModelPerformanceReport: React.FC<{crmData: CrmData, onExport: (data: an
     )
 };
 
-const LeadSourceReport: React.FC<{crmData: CrmData, onExport: (data: any[], filename: string) => void}> = ({crmData, onExport}) => {
+const LeadSourceReport: React.FC<{crmData: CrmData, onExport: (data: any[], filename: string) => void, theme: string}> = ({crmData, onExport, theme}) => {
     const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
 
     const reportData = useMemo(() => {
@@ -1541,12 +1574,12 @@ const LeadSourceReport: React.FC<{crmData: CrmData, onExport: (data: any[], file
         <ReportCard title="Hiệu quả Nguồn khách hàng" onExport={() => onExport(reportData, 'lead_source_report')}>
             <div className="space-y-4">
                  <div className="chart-container h-64">
-                    <BarChart data={chartData} options={{ plugins: { legend: { display: false } } }} />
+                    <BarChart data={chartData} options={{ plugins: { legend: { display: false } } }} theme={theme} />
                 </div>
                  <div className="overflow-x-auto max-h-60 custom-scrollbar">
-                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
-                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 2 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
+                     <table className="w-full text-sm text-gray-700 dark:text-gray-300">
+                        <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600 dark:text-gray-300">{h}</th>)}</tr></thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">{reportData.map((row, i) => <tr key={i}>{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 2 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
                     </table>
                 </div>
             </div>
@@ -1554,7 +1587,7 @@ const LeadSourceReport: React.FC<{crmData: CrmData, onExport: (data: any[], file
     );
 };
 
-const CacLtvReport: React.FC<{ crmData: CrmData; onExport: (data: any[], filename: string) => void }> = ({ crmData, onExport }) => {
+const CacLtvReport: React.FC<{ crmData: CrmData; onExport: (data: any[], filename: string) => void, theme: string }> = ({ crmData, onExport, theme }) => {
     const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
 
     const reportData = useMemo(() => {
@@ -1605,12 +1638,12 @@ const CacLtvReport: React.FC<{ crmData: CrmData; onExport: (data: any[], filenam
         <ReportCard title="Chi phí Thu hút KH (CAC) vs. Giá trị Vòng đời (LTV)" onExport={() => onExport(formattedDataForExport, 'cac_ltv_report')}>
             <div className="space-y-4">
                 <div className="chart-container h-64">
-                    <BarChart data={chartData} options={{ plugins: { legend: { display: false } } }} />
+                    <BarChart data={chartData} options={{ plugins: { legend: { display: false } } }} theme={theme} />
                 </div>
                 <div className="overflow-x-auto max-h-60 custom-scrollbar">
-                    <table className="w-full text-sm">
-                         <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
-                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{j > 1 && typeof val === 'number' ? (j === 4 ? val.toFixed(2) : formatCurrency(val)) : val}</td>)}</tr>)}</tbody>
+                    <table className="w-full text-sm text-gray-700 dark:text-gray-300">
+                         <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600 dark:text-gray-300">{h}</th>)}</tr></thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">{reportData.map((row, i) => <tr key={i}>{Object.values(row).map((val, j) => <td key={j} className="p-2">{j > 1 && typeof val === 'number' ? (j === 4 ? val.toFixed(2) : formatCurrency(val)) : val}</td>)}</tr>)}</tbody>
                     </table>
                 </div>
             </div>
@@ -1619,7 +1652,7 @@ const CacLtvReport: React.FC<{ crmData: CrmData; onExport: (data: any[], filenam
 };
 
 
-const BarChart: React.FC<{data: any, options?: any}> = ({data, options}) => {
+const BarChart: React.FC<{data: any, options?: any, theme: string}> = ({data, options, theme}) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstance = useRef<Chart | null>(null);
 
@@ -1629,15 +1662,32 @@ const BarChart: React.FC<{data: any, options?: any}> = ({data, options}) => {
         if (!ctx) return;
 
         if (chartInstance.current) chartInstance.current.destroy();
+        
+        const textColor = theme === 'dark' ? '#cbd5e1' : '#475569';
+        const gridColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        
+        const finalOptions = { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            ...options,
+            scales: {
+                y: { ...options?.scales?.y, ticks: { ...options?.scales?.y?.ticks, color: textColor }, grid: { ...options?.scales?.y?.grid, color: gridColor } },
+                x: { ...options?.scales?.x, ticks: { ...options?.scales?.x?.ticks, color: textColor }, grid: { ...options?.scales?.x?.grid, color: gridColor } }
+            },
+            plugins: {
+                ...options?.plugins,
+                legend: { ...options?.plugins?.legend, labels: { ...options?.plugins?.legend?.labels, color: textColor } }
+            }
+        };
 
-        chartInstance.current = new Chart(ctx, { type: 'bar', data, options: { responsive: true, maintainAspectRatio: false, ...options } });
+        chartInstance.current = new Chart(ctx, { type: 'bar', data, options: finalOptions });
         
         return () => { if (chartInstance.current) chartInstance.current.destroy(); };
-    }, [data, options]);
+    }, [data, options, theme]);
     return <canvas ref={chartRef} />;
 };
 
-const PieChart: React.FC<{data: any, options?: any}> = ({data, options}) => {
+const PieChart: React.FC<{data: any, options?: any, theme: string}> = ({data, options, theme}) => {
     const chartRef = useRef<HTMLCanvasElement>(null);
     const chartInstance = useRef<Chart | null>(null);
 
@@ -1647,11 +1697,26 @@ const PieChart: React.FC<{data: any, options?: any}> = ({data, options}) => {
         if (!ctx) return;
 
         if (chartInstance.current) chartInstance.current.destroy();
+        
+        const textColor = theme === 'dark' ? '#e2e8f0' : '#334155';
+        const borderColor = theme === 'dark' ? '#1f2937' : '#ffffff';
+        
+        const finalData = {
+            ...data,
+            datasets: data.datasets.map((ds: any) => ({ ...ds, borderColor }))
+        };
+        
+        const finalOptions = { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { position: 'right', labels: { color: textColor } } }, 
+            ...options 
+        };
 
-        chartInstance.current = new Chart(ctx, { type: 'pie', data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } }, ...options } });
+        chartInstance.current = new Chart(ctx, { type: 'pie', data: finalData, options: finalOptions });
         
         return () => { if (chartInstance.current) chartInstance.current.destroy(); };
-    }, [data, options]);
+    }, [data, options, theme]);
     return <canvas ref={chartRef} />;
 };
 
@@ -1683,7 +1748,7 @@ export const SettingsPanel: React.FC<{
 
     return (
          <div className="space-y-8">
-            <h1 className="text-2xl font-bold text-gray-800">Cài đặt Hệ thống</h1>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Cài đặt Hệ thống</h1>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <EditableSettingList
                     title="Trạng thái Pipeline"
@@ -1724,9 +1789,9 @@ export const SettingsPanel: React.FC<{
                 />
             </div>
 
-            <div className="bg-white rounded-xl shadow p-6 border-l-4 border-red-500">
-                <h3 className="font-bold text-lg text-red-700 mb-2">Vùng nguy hiểm</h3>
-                <p className="text-sm text-gray-600 mb-4">Các hành động này không thể hoàn tác. Hãy cẩn thận.</p>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 border-l-4 border-red-500">
+                <h3 className="font-bold text-lg text-red-700 dark:text-red-500 mb-2">Vùng nguy hiểm</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Các hành động này không thể hoàn tác. Hãy cẩn thận.</p>
                 <div className="flex space-x-4">
                     <button onClick={handleResetAllData} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">Xóa Dữ liệu Khách hàng</button>
                 </div>
@@ -1798,28 +1863,28 @@ function EditableSettingList<T extends { id: string, name: string, order?: numbe
     };
 
     const renderEditForm = (item: Partial<T>, isNew: boolean, stateSetter: (d: Partial<T>) => void) => (
-        <div className="grid grid-cols-2 gap-2 p-2 bg-gray-100 rounded-md">
+        <div className="grid grid-cols-2 gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
             {displayFields.map(field => (
                  <div key={field as string}>
-                     <label className="text-xs capitalize">{field as string}</label>
+                     <label className="text-xs capitalize dark:text-gray-300">{field as string}</label>
                      <input 
                         type={field === 'color' ? 'color' : field === 'amount' ? 'number' : 'text'}
                         value={item[field] as string || ''}
                         onChange={e => stateSetter({ ...item, [field]: e.target.value })}
-                        className="w-full p-1 border rounded"
+                        className="w-full p-1 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
                     />
                  </div>
             ))}
             { 'type' in itemFactory() &&
                  <div>
-                     <label className="text-xs">Type</label>
-                      <select value={item['type']} onChange={e => stateSetter({...item, type: e.target.value})} className="w-full p-1 border rounded">
+                     <label className="text-xs dark:text-gray-300">Type</label>
+                      <select value={item['type']} onChange={e => stateSetter({...item, type: e.target.value})} className="w-full p-1 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
                           <option value="pipeline">Pipeline</option><option value="win">Win</option><option value="delivered">Delivered</option><option value="lostsale">Lost Sale</option>
                       </select>
                  </div>
             }
              <div className="col-span-2 flex justify-end space-x-2">
-                 <button onClick={() => isNew ? setIsAdding(false) : setEditingId(null)} className="px-2 py-1 text-xs border rounded">Hủy</button>
+                 <button onClick={() => isNew ? setIsAdding(false) : setEditingId(null)} className="px-2 py-1 text-xs border dark:border-gray-600 dark:text-gray-300 rounded">Hủy</button>
                  <button onClick={isNew ? handleAdd : handleSave} className="px-2 py-1 text-xs bg-green-500 text-white rounded">Lưu</button>
             </div>
         </div>
@@ -1827,23 +1892,23 @@ function EditableSettingList<T extends { id: string, name: string, order?: numbe
     
 
     return (
-        <div className="bg-white rounded-xl shadow p-6">
-            <h3 className="font-bold text-lg mb-2">{title}</h3>
-            {helpText && <p className="text-sm text-gray-500 mb-4">{helpText}</p>}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+            <h3 className="font-bold text-lg mb-2 dark:text-gray-200">{title}</h3>
+            {helpText && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{helpText}</p>}
             <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
                 {items.map((item, index) => (
-                     <div key={item.id} className="p-2 border rounded-lg" onDrop={e => handleDrop(e, index)} onDragOver={e => e.preventDefault()}>
+                     <div key={item.id} className="p-2 border dark:border-gray-700 rounded-lg" onDrop={e => handleDrop(e, index)} onDragOver={e => e.preventDefault()}>
                          {editingId === item.id ? renderEditForm(data, false, setData) : (
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center">
-                                    {enableDragDrop && <span className="cursor-move text-gray-400 mr-2" draggable onDragStart={e => handleDragStart(e, index)}><GripVerticalIcon /></span>}
+                                    {enableDragDrop && <span className="cursor-move text-gray-400 dark:text-gray-500 mr-2" draggable onDragStart={e => handleDragStart(e, index)}><GripVerticalIcon /></span>}
                                     { 'color' in item && <span className="w-4 h-4 rounded-full mr-3" style={{backgroundColor: item.color as string}}></span> }
-                                    <span className="font-medium">{item.name}</span>
-                                    { 'amount' in item && <span className="text-gray-500 ml-2"> - {formatCurrency(item.amount as number)}</span>}
+                                    <span className="font-medium dark:text-gray-300">{item.name}</span>
+                                    { 'amount' in item && <span className="text-gray-500 dark:text-gray-400 ml-2"> - {formatCurrency(item.amount as number)}</span>}
                                 </div>
                                 <div className="space-x-2">
-                                     <button aria-label="Chỉnh sửa" onClick={() => handleEdit(item)} className="p-1 text-gray-500 hover:text-indigo-600"><Edit2Icon className="w-4 h-4"/></button>
-                                     <button aria-label="Xóa" onClick={() => handleDelete(item.id)} className="p-1 text-gray-500 hover:text-red-600"><Trash2Icon className="w-4 h-4"/></button>
+                                     <button aria-label="Chỉnh sửa" onClick={() => handleEdit(item)} className="p-1 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"><Edit2Icon className="w-4 h-4"/></button>
+                                     <button aria-label="Xóa" onClick={() => handleDelete(item.id)} className="p-1 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"><Trash2Icon className="w-4 h-4"/></button>
                                 </div>
                             </div>
                          )}
@@ -1852,7 +1917,7 @@ function EditableSettingList<T extends { id: string, name: string, order?: numbe
             </div>
              <div className="mt-4">
                 {isAdding ? renderEditForm(newData, true, setNewData) : (
-                    <button onClick={() => { setIsAdding(true); setEditingId(null); setNewData(itemFactory()) }} className="w-full p-2 text-sm border-2 border-dashed rounded-lg text-gray-500 hover:bg-gray-100 hover:border-gray-400">
+                    <button onClick={() => { setIsAdding(true); setEditingId(null); setNewData(itemFactory()) }} className="w-full p-2 text-sm border-2 border-dashed rounded-lg text-gray-500 dark:border-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500">
                         + Thêm mới
                     </button>
                 )}
@@ -1881,14 +1946,14 @@ export const RemindersView: React.FC<{
     const getCustomer = (id: string) => customers.find(c => c.id === id);
 
     return (
-        <div className="bg-white rounded-xl shadow p-4 sm:p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-bold text-gray-800">Quản lý Nhắc hẹn</h2>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">Quản lý Nhắc hẹn</h2>
                 <div className="flex items-center space-x-2">
-                     <div className="bg-gray-100 p-1 rounded-lg">
-                        <button onClick={() => setFilter('pending')} className={`px-3 py-1 text-sm rounded-md ${filter === 'pending' ? 'bg-white shadow' : 'text-gray-600'}`}>Chưa xong</button>
-                        <button onClick={() => setFilter('completed')} className={`px-3 py-1 text-sm rounded-md ${filter === 'completed' ? 'bg-white shadow' : 'text-gray-600'}`}>Đã xong</button>
-                        <button onClick={() => setFilter('all')} className={`px-3 py-1 text-sm rounded-md ${filter === 'all' ? 'bg-white shadow' : 'text-gray-600'}`}>Tất cả</button>
+                     <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-lg">
+                        <button onClick={() => setFilter('pending')} className={`px-3 py-1 text-sm rounded-md ${filter === 'pending' ? 'bg-white dark:bg-gray-700 shadow' : 'text-gray-600 dark:text-gray-400'}`}>Chưa xong</button>
+                        <button onClick={() => setFilter('completed')} className={`px-3 py-1 text-sm rounded-md ${filter === 'completed' ? 'bg-white dark:bg-gray-700 shadow' : 'text-gray-600 dark:text-gray-400'}`}>Đã xong</button>
+                        <button onClick={() => setFilter('all')} className={`px-3 py-1 text-sm rounded-md ${filter === 'all' ? 'bg-white dark:bg-gray-700 shadow' : 'text-gray-600 dark:text-gray-400'}`}>Tất cả</button>
                     </div>
                     <button onClick={() => onOpenReminderModal(null)} className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition flex items-center">
                         <PlusIcon className="w-4 h-4 mr-2" /> Thêm
@@ -1901,27 +1966,27 @@ export const RemindersView: React.FC<{
                     const customer = getCustomer(reminder.customerId);
                     const isOverdue = !reminder.completed && reminder.dueDate < Date.now();
                      return (
-                         <div key={reminder.id} className={`p-4 border rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between transition ${reminder.completed ? 'bg-gray-50 opacity-70' : 'bg-white'}`}>
+                         <div key={reminder.id} className={`p-4 border dark:border-gray-700 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between transition ${reminder.completed ? 'bg-gray-50 dark:bg-gray-800/50 opacity-70' : 'bg-white dark:bg-gray-800'}`}>
                             <div className="flex items-start">
-                                <button aria-label="Đánh dấu hoàn thành" onClick={() => onToggleComplete(reminder.id)} className={`mr-4 mt-1 flex-shrink-0 ${reminder.completed ? 'text-green-500' : 'text-gray-300 hover:text-green-500'}`}>
+                                <button aria-label="Đánh dấu hoàn thành" onClick={() => onToggleComplete(reminder.id)} className={`mr-4 mt-1 flex-shrink-0 ${reminder.completed ? 'text-green-500' : 'text-gray-300 dark:text-gray-600 hover:text-green-500'}`}>
                                     {reminder.completed ? <CheckCircleIcon className="w-6 h-6"/> : <div className="w-6 h-6 rounded-full border-2 border-current"></div>}
                                  </button>
                                  <div>
-                                     <p className={`font-semibold flex items-center ${isOverdue ? 'text-red-600' : 'text-gray-800'} ${reminder.completed ? 'line-through' : ''}`}>
+                                     <p className={`font-semibold flex items-center ${isOverdue ? 'text-red-600' : 'text-gray-800 dark:text-gray-200'} ${reminder.completed ? 'line-through' : ''}`}>
                                         {reminder.title}
-                                        {reminder.isAuto && <span title="Nhắc hẹn tự động" className="ml-2 text-indigo-500"><BotIcon className="w-4 h-4"/></span>}
+                                        {reminder.isAuto && <span title="Nhắc hẹn tự động" className="ml-2 text-indigo-500 dark:text-indigo-400"><BotIcon className="w-4 h-4"/></span>}
                                     </p>
-                                     <p className="text-sm text-gray-500 mt-1">{reminder.description}</p>
-                                      <p className="text-sm text-gray-500 mt-2">
-                                          KH: <strong className="text-indigo-600">{customer?.name || '...'}</strong> | 
-                                          Hạn: <span className={`font-medium ${isOverdue ? 'text-red-500' : 'text-gray-600'}`}>{formatDateTime(reminder.dueDate)}</span>
+                                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{reminder.description}</p>
+                                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                                          KH: <strong className="text-indigo-600 dark:text-indigo-400">{customer?.name || '...'}</strong> | 
+                                          Hạn: <span className={`font-medium ${isOverdue ? 'text-red-500' : 'text-gray-600 dark:text-gray-300'}`}>{formatDateTime(reminder.dueDate)}</span>
                                      </p>
                                  </div>
                              </div>
                              <div className="flex items-center space-x-1 flex-shrink-0 ml-auto sm:ml-4 mt-3 sm:mt-0">
-                                <span className={`px-2 py-1 text-xs rounded-full ${reminder.priority === 'high' ? 'bg-red-100 text-red-800' : reminder.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{reminder.priority}</span>
-                                <button aria-label="Chỉnh sửa" onClick={() => onOpenReminderModal(null, reminder)} className="p-2 text-gray-400 hover:text-indigo-600 rounded-full"><Edit2Icon className="w-4 h-4" /></button>
-                                <button aria-label="Xóa" onClick={() => onDelete(reminder.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-full"><Trash2Icon className="w-4 h-4" /></button>
+                                <span className={`px-2 py-1 text-xs rounded-full ${reminder.priority === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' : reminder.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'}`}>{reminder.priority}</span>
+                                <button aria-label="Chỉnh sửa" onClick={() => onOpenReminderModal(null, reminder)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full"><Edit2Icon className="w-4 h-4" /></button>
+                                <button aria-label="Xóa" onClick={() => onDelete(reminder.id)} className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 rounded-full"><Trash2Icon className="w-4 h-4" /></button>
                             </div>
                         </div>
                     );
@@ -1943,6 +2008,9 @@ interface ReminderFormModalProps {
 export const ReminderFormModal: React.FC<ReminderFormModalProps> = ({isOpen, onClose, onSave, reminder, customerId, customers, user}) => {
     const [formData, setFormData] = useState({ title: '', description: '', dueDate: '', priority: 'medium' as Reminder['priority'], customerId: '', completed: false });
     
+    const inputClasses = "w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200";
+    const labelClasses = "block text-sm font-medium text-gray-700 dark:text-gray-300";
+
     useEffect(() => {
         if(isOpen) {
             if (reminder) {
@@ -1979,34 +2047,34 @@ export const ReminderFormModal: React.FC<ReminderFormModalProps> = ({isOpen, onC
         <Modal isOpen={isOpen} title={reminder ? 'Sửa nhắc hẹn' : 'Thêm nhắc hẹn mới'} onClose={onClose}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium">Tiêu đề *</label>
-                    <input type="text" value={formData.title} onChange={e => setFormData(p => ({...p, title: e.target.value}))} className="w-full p-2 border rounded-lg" required/>
+                    <label className={labelClasses}>Tiêu đề *</label>
+                    <input type="text" value={formData.title} onChange={e => setFormData(p => ({...p, title: e.target.value}))} className={inputClasses} required/>
                 </div>
                  <div>
-                    <label className="block text-sm font-medium">Khách hàng *</label>
-                    <select value={formData.customerId} onChange={e => setFormData(p => ({...p, customerId: e.target.value}))} className="w-full p-2 border rounded-lg bg-gray-50" required>
+                    <label className={labelClasses}>Khách hàng *</label>
+                    <select value={formData.customerId} onChange={e => setFormData(p => ({...p, customerId: e.target.value}))} className={inputClasses} required>
                         <option value="">-- Chọn khách hàng --</option>
                         {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium">Thời gian *</label>
-                    <input type="datetime-local" value={formData.dueDate} onChange={e => setFormData(p => ({...p, dueDate: e.target.value}))} className="w-full p-2 border rounded-lg" required/>
+                    <label className={labelClasses}>Thời gian *</label>
+                    <input type="datetime-local" value={formData.dueDate} onChange={e => setFormData(p => ({...p, dueDate: e.target.value}))} className={inputClasses} required/>
                 </div>
                  <div>
-                    <label className="block text-sm font-medium">Mô tả</label>
-                    <textarea value={formData.description} onChange={e => setFormData(p => ({...p, description: e.target.value}))} className="w-full p-2 border rounded-lg" rows={3}/>
+                    <label className={labelClasses}>Mô tả</label>
+                    <textarea value={formData.description} onChange={e => setFormData(p => ({...p, description: e.target.value}))} className={inputClasses} rows={3}/>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium">Ưu tiên</label>
-                     <select value={formData.priority} onChange={e => setFormData(p => ({...p, priority: e.target.value as Reminder['priority']}))} className="w-full p-2 border rounded-lg">
+                    <label className={labelClasses}>Ưu tiên</label>
+                     <select value={formData.priority} onChange={e => setFormData(p => ({...p, priority: e.target.value as Reminder['priority']}))} className={inputClasses}>
                         <option value="high">Cao</option>
                         <option value="medium">Trung bình</option>
                         <option value="low">Thấp</option>
                     </select>
                 </div>
-                 <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
-                    <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg">Hủy</button>
+                 <div className="flex justify-end space-x-3 pt-4 border-t dark:border-gray-700 mt-6">
+                    <button type="button" onClick={onClose} className="px-4 py-2 border dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Hủy</button>
                     <button type="submit" className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Lưu</button>
                 </div>
             </form>
@@ -2082,7 +2150,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     };
     
     if (loading) {
-        return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
+        return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><LoadingSpinner /></div>;
     }
 
     return (
@@ -2127,34 +2195,34 @@ const LoginView: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-            <div className="w-full max-w-sm bg-white rounded-xl shadow-lg p-8">
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+            <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
                 <div className="flex justify-center mb-6">
                     <BriefcaseIcon className="w-12 h-12 text-indigo-600" />
                 </div>
-                <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">CRM Sales MG</h2>
-                <p className="text-center text-gray-500 mb-6">Đăng nhập để tiếp tục</p>
+                <h2 className="text-2xl font-bold text-center text-gray-800 dark:text-gray-200 mb-2">CRM Sales MG</h2>
+                <p className="text-center text-gray-500 dark:text-gray-400 mb-6">Đăng nhập để tiếp tục</p>
                 <form onSubmit={handleLogin} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="username">Tên đăng nhập</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" htmlFor="username">Tên đăng nhập</label>
                         <input
                             id="username"
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
                             placeholder="admin / user"
                             autoComplete="username"
                         />
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="password">Mật khẩu</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" htmlFor="password">Mật khẩu</label>
                         <input
                             id="password"
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
                             placeholder="••••••••"
                             autoComplete="current-password"
                         />
@@ -2237,31 +2305,36 @@ const MainLayout: React.FC = () => {
     ];
     
     const SidebarContent = () => (
-        <div className="flex flex-col h-full bg-white">
-            <div className="h-16 border-b flex items-center px-6 flex-shrink-0">
+        <div className="flex flex-col h-full bg-white dark:bg-gray-800">
+            <div className="h-16 border-b dark:border-gray-700 flex items-center px-6 flex-shrink-0">
                <BriefcaseIcon className="w-8 h-8 text-indigo-600"/>
-               <h1 className="text-xl font-bold ml-3">CRM Sales MG</h1>
+               <h1 className="text-xl font-bold ml-3 dark:text-white">CRM Sales MG</h1>
             </div>
             <nav className="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
                 {navItems.map(item => (
-                    <button key={item.id} onClick={() => { setActiveView(item.id); setIsMobileNavOpen(false); }} className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition ${activeView === item.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                    <button key={item.id} onClick={() => { setActiveView(item.id); setIsMobileNavOpen(false); }} className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition ${activeView === item.id ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
                         <item.icon className="w-5 h-5 mr-3"/>
                         {item.label}
                     </button>
                 ))}
             </nav>
-             <div className="p-4 border-t flex-shrink-0">
+             <div className="p-4 border-t dark:border-gray-700 flex-shrink-0">
                  <div className="flex items-center mb-4">
-                    <UserCircleIcon className="w-8 h-8 text-gray-400"/>
+                    <UserCircleIcon className="w-8 h-8 text-gray-400 dark:text-gray-500"/>
                     <div className="ml-3">
-                        <p className="font-semibold text-sm">{currentUser?.name}</p>
-                        <p className="text-xs text-gray-500 capitalize">{currentUser?.role}</p>
+                        <p className="font-semibold text-sm dark:text-gray-200">{currentUser?.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{currentUser?.role}</p>
                     </div>
                  </div>
-                <button onClick={logout} className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-100">
-                    <LogOutIcon className="w-5 h-5 mr-3"/>
-                    Đăng xuất
-                </button>
+                <div className="flex items-center justify-between">
+                     <button onClick={logout} className="flex-1 text-left flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <LogOutIcon className="w-5 h-5 mr-3"/>
+                        Đăng xuất
+                    </button>
+                    <button onClick={crm.toggleTheme} title="Chuyển đổi Giao diện" className="p-2.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        {crm.theme === 'light' ? <MoonIcon className="w-5 h-5"/> : <SunIcon className="w-5 h-5"/>}
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -2278,7 +2351,7 @@ const MainLayout: React.FC = () => {
 
         switch (activeView) {
             case 'dashboard':
-                return <Dashboard {...commonProps} customers={crm.dashboardCustomers} statuses={crm.crmData.statuses} reminders={crm.filteredReminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={crm.handleToggleReminderComplete} onDeleteReminder={crm.handleDeleteReminder} onOpenCustomer={openEditCustomer} />;
+                return <Dashboard {...commonProps} customers={crm.dashboardCustomers} statuses={crm.crmData.statuses} reminders={crm.filteredReminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={crm.handleToggleReminderComplete} onDeleteReminder={crm.handleDeleteReminder} onOpenCustomer={openEditCustomer} theme={crm.theme} />;
             case 'reminders':
                 return <RemindersView {...commonProps} reminders={crm.filteredReminders} customers={crm.dashboardCustomers} onOpenReminderModal={openReminderModal} onToggleComplete={crm.handleToggleReminderComplete} onDelete={crm.handleDeleteReminder} />;
             case 'kanban':
@@ -2286,7 +2359,7 @@ const MainLayout: React.FC = () => {
             case 'list':
                 return <ListView {...commonProps} customers={crm.paginatedCustomers} totalCustomers={crm.totalFilteredCustomers} statuses={crm.crmData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(ids) => setDeleteConfirm({isOpen: true, ids})} onGenerateScript={handleGenerateScript} onAddCustomer={openAddCustomer} users={crm.users} selectedUserId={crm.selectedUserId} onSelectedUserChange={crm.setSelectedUserId} searchTerm={crm.searchTerm} selectedCustomerIds={crm.selectedCustomerIds} onToggleSelectCustomer={crm.handleToggleSelectCustomer} onToggleSelectAll={crm.handleToggleSelectAll} sortConfig={crm.sortConfig} handleSort={crm.handleSort} pagination={crm.pagination} setPagination={crm.setPagination} />;
             case 'reports':
-                return currentUser?.role === 'admin' ? <ReportsView {...commonProps} crmData={crm.crmData} users={crm.users} /> : null;
+                return currentUser?.role === 'admin' ? <ReportsView {...commonProps} crmData={crm.crmData} users={crm.users} theme={crm.theme} /> : null;
             case 'settings':
                 return currentUser?.role === 'admin' ? <SettingsPanel {...commonProps} users={crm.users} crmData={crm.crmData} setUsers={crm.setUsers} setCrmData={crm.setCrmData} /> : null;
             default:
@@ -2295,7 +2368,7 @@ const MainLayout: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen bg-gray-100">
+        <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
             {/* Desktop Sidebar */}
             <aside className="w-64 flex-shrink-0 hidden lg:block">
                 <SidebarContent />
@@ -2312,13 +2385,13 @@ const MainLayout: React.FC = () => {
             )}
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <header className="h-16 bg-white border-b flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
+                <header className="h-16 bg-white dark:bg-gray-800 border-b dark:border-gray-700 flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
                     <div className="flex items-center">
-                        <button onClick={() => setIsMobileNavOpen(true)} className="lg:hidden mr-4 p-2 text-gray-600">
+                        <button onClick={() => setIsMobileNavOpen(true)} className="lg:hidden mr-4 p-2 text-gray-600 dark:text-gray-300">
                             <MenuIcon />
                         </button>
                          <div className="relative w-64 sm:w-96">
-                            <input type="text" placeholder="Tìm kiếm khách hàng..." value={crm.searchTerm} onChange={e => crm.setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"/>
+                            <input type="text" placeholder="Tìm kiếm khách hàng..." value={crm.searchTerm} onChange={e => crm.setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:bg-white dark:focus:bg-gray-600 focus:ring-2 focus:ring-indigo-500"/>
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><SearchIcon/></div>
                         </div>
                     </div>

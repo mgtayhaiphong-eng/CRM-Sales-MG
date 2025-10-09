@@ -14,11 +14,18 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
         
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background: #2d3748; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #4a5568; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #718096; }
+
         /* Cải tiến Kéo-Thả */
         .drag-over { 
             background-color: #eef2ff !important; 
             border: 2px dashed #6366f1 !important;
             box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+        }
+        .dark .drag-over {
+            background-color: #312e81 !important;
         }
         
         .chart-container { position: relative; height: 300px; width: 100%; }
@@ -61,6 +68,9 @@
             transform: translateX(-100%);
             transition: transform 0.3s ease;
         }
+        .dark .sidebar-mobile {
+             background-color: #111827; /* gray-900 */
+        }
         .sidebar-mobile.open {
             transform: translateX(0);
         }
@@ -74,7 +84,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 dark:bg-gray-900">
     <div id="root"></div>
     <script type="importmap">
 {
