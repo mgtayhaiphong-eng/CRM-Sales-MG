@@ -2237,6 +2237,53 @@ const LoginView: React.FC = () => {
     );
 };
 
+interface SidebarContentProps {
+    navItems: { id: string; label: string; icon: React.FC<{ className?: string }> }[];
+    activeView: string;
+    setActiveView: (view: string) => void;
+    setIsMobileNavOpen: (isOpen: boolean) => void;
+    currentUser: User | null;
+    logout: () => void;
+    theme: string;
+    toggleTheme: () => void;
+}
+
+const SidebarContent: React.FC<SidebarContentProps> = ({ navItems, activeView, setActiveView, setIsMobileNavOpen, currentUser, logout, theme, toggleTheme }) => (
+    <div className="flex flex-col h-full bg-white dark:bg-gray-800">
+        <div className="h-16 border-b dark:border-gray-700 flex items-center px-6 flex-shrink-0">
+           <BriefcaseIcon className="w-8 h-8 text-indigo-600"/>
+           <h1 className="text-xl font-bold ml-3 dark:text-white">CRM Sales MG</h1>
+        </div>
+        <nav className="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
+            {navItems.map(item => (
+                <button key={item.id} onClick={() => { setActiveView(item.id); setIsMobileNavOpen(false); }} className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition ${activeView === item.id ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                    <item.icon className="w-5 h-5 mr-3"/>
+                    {item.label}
+                </button>
+            ))}
+        </nav>
+         <div className="p-4 border-t dark:border-gray-700 flex-shrink-0">
+             <div className="flex items-center mb-4">
+                <UserCircleIcon className="w-8 h-8 text-gray-400 dark:text-gray-500"/>
+                <div className="ml-3">
+                    <p className="font-semibold text-sm dark:text-gray-200">{currentUser?.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{currentUser?.role}</p>
+                </div>
+             </div>
+            <div className="flex items-center justify-between">
+                 <button onClick={logout} className="flex-1 text-left flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <LogOutIcon className="w-5 h-5 mr-3"/>
+                    Đăng xuất
+                </button>
+                <button onClick={toggleTheme} title="Chuyển đổi Giao diện" className="p-2.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                    {theme === 'light' ? <MoonIcon className="w-5 h-5"/> : <SunIcon className="w-5 h-5"/>}
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
+
 const MainLayout: React.FC = () => {
     const { currentUser, logout } = useAuth();
     const { addNotification } = useNotification();
@@ -2293,7 +2340,7 @@ const MainLayout: React.FC = () => {
         setActiveReminderCustomerId(null);
     };
 
-    const navItems = [
+    const navItems = useMemo(() => [
         { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboardIcon },
         { id: 'reminders', label: 'Nhắc hẹn', icon: BellIcon },
         { id: 'kanban', label: 'Pipeline', icon: KanbanSquareIcon },
@@ -2302,42 +2349,7 @@ const MainLayout: React.FC = () => {
             { id: 'reports', label: 'Báo cáo', icon: FileTextIcon },
             { id: 'settings', label: 'Cài đặt', icon: SettingsIcon }
         ] : [])
-    ];
-    
-    const SidebarContent = () => (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-800">
-            <div className="h-16 border-b dark:border-gray-700 flex items-center px-6 flex-shrink-0">
-               <BriefcaseIcon className="w-8 h-8 text-indigo-600"/>
-               <h1 className="text-xl font-bold ml-3 dark:text-white">CRM Sales MG</h1>
-            </div>
-            <nav className="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
-                {navItems.map(item => (
-                    <button key={item.id} onClick={() => { setActiveView(item.id); setIsMobileNavOpen(false); }} className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition ${activeView === item.id ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-                        <item.icon className="w-5 h-5 mr-3"/>
-                        {item.label}
-                    </button>
-                ))}
-            </nav>
-             <div className="p-4 border-t dark:border-gray-700 flex-shrink-0">
-                 <div className="flex items-center mb-4">
-                    <UserCircleIcon className="w-8 h-8 text-gray-400 dark:text-gray-500"/>
-                    <div className="ml-3">
-                        <p className="font-semibold text-sm dark:text-gray-200">{currentUser?.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{currentUser?.role}</p>
-                    </div>
-                 </div>
-                <div className="flex items-center justify-between">
-                     <button onClick={logout} className="flex-1 text-left flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <LogOutIcon className="w-5 h-5 mr-3"/>
-                        Đăng xuất
-                    </button>
-                    <button onClick={crm.toggleTheme} title="Chuyển đổi Giao diện" className="p-2.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                        {crm.theme === 'light' ? <MoonIcon className="w-5 h-5"/> : <SunIcon className="w-5 h-5"/>}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
+    ], [currentUser?.role]);
     
     if (crm.isLoading) {
         return <MainLayoutSkeleton />;
@@ -2366,12 +2378,23 @@ const MainLayout: React.FC = () => {
                 return null;
         }
     };
+    
+    const sidebarProps = {
+        navItems,
+        activeView,
+        setActiveView,
+        setIsMobileNavOpen,
+        currentUser,
+        logout,
+        theme: crm.theme,
+        toggleTheme: crm.toggleTheme,
+    };
 
     return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
             {/* Desktop Sidebar */}
             <aside className="w-64 flex-shrink-0 hidden lg:block">
-                <SidebarContent />
+                <SidebarContent {...sidebarProps} />
             </aside>
             
             {/* Mobile Sidebar */}
@@ -2379,7 +2402,7 @@ const MainLayout: React.FC = () => {
                 <div className="lg:hidden">
                     <div className="sidebar-mobile-overlay animate-fade-in" onClick={() => setIsMobileNavOpen(false)}></div>
                     <div className={`sidebar-mobile ${isMobileNavOpen ? 'open' : ''}`}>
-                        <SidebarContent />
+                        <SidebarContent {...sidebarProps} />
                     </div>
                 </div>
             )}
