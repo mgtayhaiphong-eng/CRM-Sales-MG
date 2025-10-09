@@ -1,43 +1,135 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
-import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData } from './types';
+import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData, type MarketingSpend } from './types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from './constants';
 import { GeminiService } from './services/geminiService';
 import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement } from 'chart.js';
-
-// Firebase Imports
-import { auth, db } from './services/firebase';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, type User as FirebaseUser } from 'firebase/auth';
-import { collection, doc, onSnapshot, getDocs, getDoc, addDoc, setDoc, updateDoc, deleteDoc, writeBatch, query, where, documentId } from 'firebase/firestore';
-
 
 // Register Chart.js components
 Chart.register(DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement);
 
 
-// START: MOCK DATA FOR SEEDING
-const MOCK_USERS_SEED: Omit<User, 'id'>[] = [
-    { username: 'admin', password: 'admin', role: Role.ADMIN, name: 'Admin Manager' },
-    { username: 'user', password: 'user', role: Role.USER, name: 'Nguyễn Văn A' },
-    { username: 'user2', password: 'user2', role: Role.USER, name: 'Phạm Thị C' },
+// START: MOCK DATA & LOCAL STORAGE SERVICE
+const MOCK_USERS_SEED: Omit<User, 'id'| 'password'>[] = [
+    { username: 'admin', role: Role.ADMIN, name: 'Admin Manager' },
+    { username: 'user', role: Role.USER, name: 'Nguyễn Văn A' },
+    { username: 'user2', role: Role.USER, name: 'Phạm Thị C' },
 ];
 
-const MOCK_INITIAL_DATA: Omit<CrmData, 'customers' | 'reminders' | 'salesGoals'> = {
+const MOCK_INITIAL_DATA: CrmData = {
     statuses: [
-        { id: 'status1', name: '1. Khách hàng Mới', color: 'bg-indigo-400', order: 1, type: 'pipeline' },
-        { id: 'status2', name: '2. Đã Chăm sóc', color: 'bg-yellow-500', order: 2, type: 'pipeline' },
-        { id: 'status3', name: '3. Tiềm năng Cao', color: 'bg-red-600', order: 3, type: 'pipeline' },
-        { id: 'status4', name: '4. Đã ký HĐ', color: 'bg-green-600', order: 4, type: 'win' },
-        { id: 'status6', name: '5. Đã giao xe', color: 'bg-blue-600', order: 5, type: 'delivered' },
-        { id: 'status5', name: '6. Lostsale', color: 'bg-black', order: 6, type: 'lostsale' },
+        { id: 'status1', name: '1. Khách hàng Mới', color: '#6366f1', order: 1, type: 'pipeline' },
+        { id: 'status2', name: '2. Đã Chăm sóc', color: '#f59e0b', order: 2, type: 'pipeline' },
+        { id: 'status3', name: '3. Tiềm năng Cao', color: '#ef4444', order: 3, type: 'pipeline' },
+        { id: 'status4', name: '4. Đã ký HĐ', color: '#22c55e', order: 4, type: 'win' },
+        { id: 'status6', name: '5. Đã giao xe', color: '#3b82f6', order: 5, type: 'delivered' },
+        { id: 'status5', name: '6. Lostsale', color: '#1f2937', order: 6, type: 'lostsale' },
     ],
     carModels: [
-        { id: 'model1', name: 'MG ZS' }, { id: 'model2', name: 'MG HS' }, { id: 'model3', name: 'MG RX5' }, { id: 'model4', name: 'MG GT' }
+        { id: 'model1', name: 'MG ZS' }, { id: 'model2', name: 'MG HS' }, { id: 'model3', name: 'MG RX5' }, { id: 'model4', name: 'MG GT' }, {id: 'model5', name: 'MG5'}
     ],
     customerSources: [
         { id: 'source1', name: 'Facebook' }, { id: 'source2', name: 'Website' }, { id: 'source3', name: 'Showroom' }, { id: 'source4', name: 'Giới thiệu' }, { id: 'source5', name: 'Zalo' }
     ],
+    marketingSpends: [
+        { id: 'spend1', name: 'Facebook', amount: 15000000 },
+        { id: 'spend2', name: 'Website', amount: 25000000 },
+        { id: 'spend3', name: 'Showroom', amount: 5000000 },
+        { id: 'spend4', name: 'Giới thiệu', amount: 0 },
+        { id: 'spend5', name: 'Zalo', amount: 8000000 },
+    ],
+    customers: [
+        { id: 'cust_1', name: 'Trần Văn Hùng', phone: '0905123456', email: 'hung.tran@email.com', carModel: 'MG ZS', source: 'Facebook', statusId: 'status6', city: 'Hà Nội', notes: 'Đã giao xe, khách hàng hài lòng.', salesValue: 550000000, tier: 'WARM', createdDate: 1717213400000, lastContactDate: 1719460000000, interactions: [ { id: 'int_1_1', type: 'test_drive', date: 1719287400000, notes: 'Khách hàng lái thử, rất hài lòng.', duration: 60, outcome: 'positive', userId: 'user_2' } ], userId: 'user_2' },
+        { id: 'cust_2', name: 'Lê Thị Mai', phone: '0987654321', email: 'mai.le@email.com', carModel: 'MG HS', source: 'Website', statusId: 'status3', city: 'TP Hồ Chí Minh', notes: 'Đang phân vân giữa MG HS và đối thủ. Cần follow-up chặt.', salesValue: 780000000, tier: 'HOT', createdDate: 1717313400000, lastContactDate: 1719560000000, interactions: [ { id: 'int_2_1', type: 'quotation', date: 1719560000000, notes: 'Gửi báo giá bản cao nhất.', duration: 15, outcome: 'neutral', userId: 'user_2' } ], userId: 'user_2' },
+        { id: 'cust_3', name: 'Phạm Văn Đức', phone: '0912345678', carModel: 'MG RX5', source: 'Showroom', statusId: 'status2', city: 'Đà Nẵng', notes: 'Khách vãng lai, đã lấy thông tin.', salesValue: 850000000, tier: 'COLD', createdDate: 1717413400000, lastContactDate: 1718990000000, interactions: [ { id: 'int_3_1', type: 'call', date: 1718990000000, notes: 'Gọi lại hỏi thăm, khách đang bận.', duration: 2, outcome: 'neutral', userId: 'user_3' } ], userId: 'user_3' },
+        { id: 'cust_4', name: 'Nguyễn Thị Thu', phone: '0333444555', carModel: 'MG GT', source: 'Giới thiệu', statusId: 'status6', city: 'Hải Phòng', salesValue: 650000000, tier: 'WARM', createdDate: 1716213400000, lastContactDate: 1718855400000, interactions: [], userId: 'user_3' },
+        { id: 'cust_5', name: 'Hoàng Văn Nam', phone: '0888999111', carModel: 'MG5', source: 'Zalo', statusId: 'status5', city: 'Cần Thơ', notes: 'Khách đã mua xe hãng khác.', salesValue: 580000000, tier: 'LOST', createdDate: 1716313400000, lastContactDate: 1719123400000, interactions: [ { id: 'int_5_1', type: 'meeting', date: 1719023400000, notes: 'Gặp trao đổi nhưng khách chê giá.', duration: 45, outcome: 'negative', userId: 'user_2' } ], userId: 'user_2' },
+        { id: 'cust_6', name: 'Vũ Thị Lan Anh', phone: '0978111222', carModel: 'MG ZS', source: 'Facebook', statusId: 'status4', city: 'Bình Dương', salesValue: 560000000, tier: 'HOT', createdDate: 1717813400000, lastContactDate: 1719630000000, interactions: [ { id: 'int_6_1', type: 'call', date: 1719630000000, notes: 'Xác nhận lại thông tin hợp đồng.', duration: 10, outcome: 'positive', userId: 'user_3' } ], userId: 'user_3' },
+        { id: 'cust_7', name: 'Đặng Minh Quang', phone: '0945555888', email: 'quang.dang@email.com', carModel: 'MG HS', source: 'Website', statusId: 'status1', city: 'Hà Nội', salesValue: 790000000, tier: 'COLD', createdDate: 1719546200000, lastContactDate: 1719546200000, interactions: [], userId: 'user_2' },
+        { id: 'cust_8', name: 'Bùi Thị Kim Oanh', phone: '0356789123', carModel: 'MG HS', source: 'Showroom', statusId: 'status3', city: 'Bắc Ninh', notes: 'Vợ chồng xem xe, vợ rất thích. Chồng đang cân nhắc tài chính.', salesValue: 800000000, tier: 'HOT', createdDate: 1718013400000, lastContactDate: 1719461000000, interactions: [], userId: 'user_3' },
+        { id: 'cust_9', name: 'Đỗ Tiến Dũng', phone: '0988123789', carModel: 'MG RX5', source: 'Giới thiệu', statusId: 'status2', city: 'TP Hồ Chí Minh', salesValue: 860000000, tier: 'WARM', createdDate: 1718113400000, lastContactDate: 1719287400000, interactions: [ { id: 'int_9_1', type: 'email', date: 1719287400000, notes: 'Gửi thông số kỹ thuật chi tiết.', duration: 5, outcome: 'neutral', userId: 'user_2' } ], userId: 'user_2' },
+        { id: 'cust_10', name: 'Hồ Thị Bích', phone: '0965432198', carModel: 'MG5', source: 'Zalo', statusId: 'status5', city: 'Vũng Tàu', notes: 'Không liên lạc được.', salesValue: 585000000, tier: 'LOST', createdDate: 1717513400000, lastContactDate: 1718855400000, interactions: [], userId: 'user_3' },
+        { id: 'cust_11', name: 'Lý Văn Tài', phone: '0398765432', carModel: 'MG ZS', source: 'Facebook', statusId: 'status1', city: 'Đồng Nai', salesValue: 555000000, tier: 'COLD', createdDate: 1719631000000, lastContactDate: 1719631000000, interactions: [], userId: 'user_2' },
+        { id: 'cust_12', name: 'Mai Anh Tuấn', phone: '0911223344', email: 'tuan.mai@email.com', carModel: 'MG GT', source: 'Website', statusId: 'status2', city: 'Hà Nội', salesValue: 660000000, tier: 'WARM', createdDate: 1718513400000, lastContactDate: 1719562000000, interactions: [ { id: 'int_12_1', type: 'call', date: 1719562000000, notes: 'Tư vấn về gói phụ kiện.', duration: 15, outcome: 'positive', userId: 'user_3' } ], userId: 'user_3' },
+        { id: 'cust_13', name: 'Dương Thị Yến', phone: '0344556677', carModel: 'MG HS', source: 'Showroom', statusId: 'status6', city: 'Bình Phước', salesValue: 795000000, tier: 'WARM', createdDate: 1715513400000, lastContactDate: 1717460000000, interactions: [], userId: 'user_2' },
+        { id: 'cust_14', name: 'Châu Văn Toàn', phone: '0909888777', carModel: 'MG RX5', source: 'Giới thiệu', statusId: 'status3', city: 'TP Hồ Chí Minh', salesValue: 870000000, tier: 'HOT', createdDate: 1718813400000, lastContactDate: 1719633000000, interactions: [ { id: 'int_14_1', type: 'meeting', date: 1719633000000, notes: 'Gặp tại quán cafe, khách đã gần chốt.', duration: 60, outcome: 'positive', userId: 'user_3' } ], userId: 'user_3' },
+        { id: 'cust_15', name: 'Tạ Thị Hiền', phone: '0981981981', carModel: 'MG5', source: 'Website', statusId: 'status2', city: 'Hà Nội', salesValue: 590000000, tier: 'WARM', createdDate: 1719013400000, lastContactDate: 1719465000000, interactions: [], userId: 'user_2' }
+    ],
+    reminders: [
+        { id: 'rem_1', customerId: 'cust_2', userId: 'user_2', title: 'Gọi lại chốt deal MG HS', description: 'Follow-up về báo giá và chương trình khuyến mãi tháng 6.', dueDate: Date.now() + 2 * 24 * 60 * 60 * 1000, completed: false, priority: 'high' },
+        { id: 'rem_2', customerId: 'cust_8', userId: 'user_3', title: 'Mời khách lái thử lại', description: 'Vợ thích nhưng chồng còn lăn tăn, mời cả 2 vợ chồng đến lái thử cuối tuần.', dueDate: Date.now() + 4 * 24 * 60 * 60 * 1000, completed: false, priority: 'high' },
+        { id: 'rem_3', customerId: 'cust_9', userId: 'user_2', title: 'Gửi thông tin trả góp', description: 'Khách hỏi về phương án vay ngân hàng, chuẩn bị file gửi khách.', dueDate: Date.now() + 1 * 24 * 60 * 60 * 1000, completed: false, priority: 'medium' },
+        { id: 'rem_4', customerId: 'cust_3', userId: 'user_3', title: 'Chăm sóc lại khách vãng lai', description: 'Gọi lại hỏi thăm, xem nhu cầu của khách tới đâu.', dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000, completed: false, priority: 'low' },
+        { id: 'rem_5', customerId: 'cust_1', userId: 'user_2', title: 'Hỏi thăm sau giao xe', description: 'Gọi hỏi thăm tình hình sử dụng xe, nhắc lịch bảo dưỡng lần đầu.', dueDate: Date.now() - 5 * 24 * 60 * 60 * 1000, completed: true, priority: 'medium' }
+    ],
+    salesGoals: [],
 };
-// END: MOCK DATA FOR SEEDING
+
+const LOCAL_STORAGE_KEY = 'crm_app_data';
+
+const dataService = {
+    getData: (): { users: User[], crmData: CrmData } => {
+        const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (storedData) {
+            try {
+                const parsedData = JSON.parse(storedData);
+                // Simple check to see if data is from an old structure
+                if (parsedData.crmData && parsedData.crmData.customers && parsedData.crmData.customers.length > 0) {
+                     return parsedData;
+                }
+            } catch (e) {
+                console.error("Could not parse data from localStorage, resetting.", e);
+            }
+        }
+        // If no data, parse error, or empty customers, seed initial data
+        return dataService.seedData();
+    },
+    saveData: (users: User[], crmData: CrmData) => {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ users, crmData }));
+        } catch (e) {
+            console.error("Failed to save data to localStorage", e);
+        }
+    },
+    seedData: (): { users: User[], crmData: CrmData } => {
+        const users: User[] = MOCK_USERS_SEED.map((user, index) => ({
+            ...user,
+            id: `user_${index + 1}`,
+            // In a real app, passwords should be hashed. For this local-only version, we'll use username as password.
+            password: user.username 
+        }));
+        
+        // Assign user IDs from the newly created users array
+        const user2Id = users.find(u => u.username === 'user')?.id || 'user_2';
+        const user3Id = users.find(u => u.username === 'user2')?.id || 'user_3';
+
+        const seededCrmData = { ...MOCK_INITIAL_DATA };
+        seededCrmData.customers.forEach(customer => {
+            // This logic distributes the mock customers between the two mock users.
+            customer.userId = customer.id.endsWith('2') || customer.id.endsWith('5') || customer.id.endsWith('7') || customer.id.endsWith('9') || customer.id.endsWith('11') || customer.id.endsWith('13') || customer.id.endsWith('15') ? user2Id : user3Id;
+        });
+         seededCrmData.reminders.forEach(reminder => {
+             reminder.userId = reminder.id.endsWith('1') || reminder.id.endsWith('3') || reminder.id.endsWith('5') ? user2Id : user3Id;
+        });
+
+        const initialData = { users, crmData: seededCrmData };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialData));
+        return initialData;
+    },
+    deleteAllCrmData: (): { users: User[], crmData: CrmData } => {
+        const { users } = dataService.getData(); // Keep existing users
+        const emptyCrmData: CrmData = {
+            customers: [], reminders: [], salesGoals: [],
+            statuses: MOCK_INITIAL_DATA.statuses, 
+            carModels: MOCK_INITIAL_DATA.carModels, 
+            customerSources: MOCK_INITIAL_DATA.customerSources,
+            marketingSpends: MOCK_INITIAL_DATA.marketingSpends,
+        };
+        const newData = { users, crmData: emptyCrmData };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
+        return newData;
+    }
+};
+// END: MOCK DATA & LOCAL STORAGE SERVICE
 
 
 // START: HELPER FUNCTIONS & AUTH CONTEXT
@@ -63,50 +155,39 @@ const useAuth = () => {
 };
 
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-                const userDocRef = doc(db, "users", firebaseUser.uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    setCurrentUser({ id: userDoc.id, ...userDoc.data() } as User);
-                } else {
-                    // This case might happen if user doc creation failed or was deleted.
-                    // For robustness, you could try to recreate it or sign the user out.
-                    console.error("User document not found in Firestore for UID:", firebaseUser.uid);
-                    setCurrentUser(null);
-                }
-            } else {
-                setCurrentUser(null);
-            }
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+    const [currentUser, setCurrentUser] = useState<User | null>(() => {
+        const storedUser = sessionStorage.getItem('currentUser');
+        return storedUser ? JSON.parse(storedUser) : null;
+    });
+    const [loading, setLoading] = useState(false);
 
     const login = async (username: string, password: string): Promise<boolean> => {
-        try {
-            // Firebase Auth uses email for login. We'll map username to a dummy email.
-            await signInWithEmailAndPassword(auth, `${username.toLowerCase()}@crm.app`, password);
+        setLoading(true);
+        const { users } = dataService.getData();
+        const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
+        
+        if (user) {
+            const userToStore = { ...user };
+            delete userToStore.password; // Don't store password in session storage
+            sessionStorage.setItem('currentUser', JSON.stringify(userToStore));
+            setCurrentUser(userToStore);
+            setLoading(false);
             return true;
-        } catch (error) {
-            console.error("Firebase login error:", error);
-            return false;
         }
+        
+        setLoading(false);
+        return false;
     };
 
-    const logout = async () => {
-        await signOut(auth);
+    const logout = () => {
+        sessionStorage.removeItem('currentUser');
+        setCurrentUser(null);
     };
-
+    
     if (loading) {
         return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
     }
 
-    // FIX: Corrected typo in the closing tag of AuthContext.Provider.
     return (
         <AuthContext.Provider value={{ currentUser, login, logout }}>
             {children}
@@ -128,6 +209,7 @@ const ListIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><lin
 const SettingsIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0 .73 2.73l-.22.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
 const LogOutIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></Icon>;
 const PlusIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></Icon>;
+const GripVerticalIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></Icon>;
 const SearchIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Icon>;
 const XIcon = ({ className = "w-6 h-6" }) => <Icon className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>;
 const PhoneIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></Icon>;
@@ -432,8 +514,9 @@ interface CustomerCardProps {
 const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminders, onCustomerEdit, onDelete, onStatusChange, onAddInteraction, onDeleteInteraction, onGenerateScript, onOpenReminderModal, users, searchTerm = '' }) => {
     const [showDetails, setShowDetails] = useState(false);
     const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
-    const lastInteraction = useMemo(() => customer.interactions?.length > 0 ? [...customer.interactions].sort((a, b) => b.date - a.date)[0] : null, [customer.interactions]);
     const activeReminder = useMemo(() => reminders.find(r => r.customerId === customer.id && !r.completed), [reminders, customer.id]);
+    const { currentUser } = useAuth();
+    const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
 
     return (
         <div className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all">
@@ -454,16 +537,26 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminde
                     {statuses.sort((a, b) => a.order - b.order).map(status => <option key={status.id} value={status.id}>{status.name}</option>)}
                 </select>
             </div>
-            <div className="px-4 pb-4">
-                 <button onClick={() => setShowDetails(!showDetails)} className="w-full flex justify-between items-center p-2 text-sm rounded-lg hover:bg-gray-100">
-                    <span className="flex items-center"><ClockIcon className="w-4 h-4 mr-2" />Lịch sử ({customer.interactions?.length || 0})</span>
-                    {showDetails ? <ChevronUpIcon /> : <ChevronDownIcon />}
+            <div className="px-4 pb-4 flex justify-center">
+                <button onClick={() => setShowDetails(!showDetails)} className="flex items-center px-4 py-1.5 text-sm rounded-full border bg-white hover:bg-gray-100 text-gray-700 font-medium transition-colors shadow-sm">
+                    <span>{showDetails ? 'Thu gọn' : 'Xem chi tiết'}</span>
+                    {showDetails ? <ChevronUpIcon className="w-4 h-4 ml-2 text-gray-500" /> : <ChevronDownIcon className="w-4 h-4 ml-2 text-gray-500" />}
                 </button>
-                {lastInteraction && !showDetails && <p className="mt-1 p-2 text-xs text-gray-500 truncate bg-gray-50 rounded">Cuối: {lastInteraction.notes}</p>}
             </div>
 
             {showDetails && (
-                 <div className="border-t p-4 bg-gray-50/70">
+                 <div className="border-t p-4 bg-gray-50/70 animate-fade-in-right">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm text-gray-700 mb-4 pb-4 border-b">
+                        <div className="flex items-start col-span-1 sm:col-span-2"><MailIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span>{customer.email || 'Chưa có'}</span></div>
+                        <div className="flex items-start"><MapPinIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span>{customer.city || 'Chưa có'}</span></div>
+                        <div className="flex items-start"><DollarSignIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span>{formatCurrency(customer.salesValue)}</span></div>
+                        <div className="flex items-start"><ClockIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span className="whitespace-nowrap">Tạo: {formatDate(customer.createdDate)}</span></div>
+                        <div className="flex items-start"><ClockIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span className="whitespace-nowrap">LH cuối: {formatDate(customer.lastContactDate)}</span></div>
+                        {currentUser?.role === Role.ADMIN && (
+                             <div className="flex items-start col-span-1 sm:col-span-2"><UserCircleIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <span>NV Phụ trách: {getUserName(customer.userId)}</span></div>
+                        )}
+                        {customer.notes && <div className="col-span-1 sm:col-span-2 flex items-start"><FileTextIcon className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" /> <p className="whitespace-pre-wrap">{customer.notes}</p></div>}
+                    </div>
                     <InteractionHistory
                         customer={customer}
                         onAddInteraction={(interaction) => onAddInteraction(customer.id, interaction)}
@@ -629,14 +722,17 @@ const LoginView: React.FC = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const { login } = useAuth();
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsLoading(true);
         const success = await login(username, password);
         if (!success) {
             setError('Tên đăng nhập hoặc mật khẩu không hợp lệ.');
         }
+        setIsLoading(false);
     };
 
     return (
@@ -673,8 +769,8 @@ const LoginView: React.FC = () => {
                         />
                     </div>
                     {error && <p className="text-red-500 text-sm">{error}</p>}
-                    <button type="submit" className="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition">
-                        Đăng nhập
+                    <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition disabled:bg-indigo-400">
+                        {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
                     </button>
                 </form>
             </div>
@@ -690,69 +786,72 @@ const MainLayout: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUserId, setSelectedUserId] = useState('all');
 
-    // Firestore real-time data
+    // Local Storage Data State
     const [users, setUsers] = useState<User[]>([]);
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [reminders, setReminders] = useState<Reminder[]>([]);
-    const [settings, setSettings] = useState<Omit<CrmData, 'customers' | 'reminders' | 'salesGoals'>>({ statuses: [], carModels: [], customerSources: [] });
+    const [crmData, setCrmData] = useState<CrmData>({ customers: [], statuses: [], carModels: [], customerSources: [], reminders: [], salesGoals: [], marketingSpends: [] });
     const [isLoading, setIsLoading] = useState(true);
+
+    // Initial data load
+    useEffect(() => {
+        const { users: loadedUsers, crmData: loadedCrmData } = dataService.getData();
+        setUsers(loadedUsers);
+        setCrmData(loadedCrmData);
+        setIsLoading(false);
+    }, []);
+
+    // Persist data to localStorage on change
+    useEffect(() => {
+        if (!isLoading) {
+            dataService.saveData(users, crmData);
+        }
+    }, [users, crmData, isLoading]);
     
     // Modals state
     const [showCustomerForm, setShowCustomerForm] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-    const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, customerId: '' });
+    const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: '', type: '' });
     const [scriptModal, setScriptModal] = useState({ isOpen: false, script: '', isLoading: false });
     const [showReminderForm, setShowReminderForm] = useState(false);
     const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
     const [activeReminderCustomerId, setActiveReminderCustomerId] = useState<string | null>(null);
 
-    // Set up real-time listeners for Firestore data
-    useEffect(() => {
-        setIsLoading(true);
-        const unsubscribes: (() => void)[] = [];
+    // Data visible to the current user based on their role, ignoring search term.
+    const dashboardCustomers = useMemo(() => {
+        if (user.role === Role.USER) {
+            return crmData.customers.filter(c => c.userId === user.id);
+        }
+        if (user.role === Role.ADMIN && selectedUserId !== 'all') {
+            return crmData.customers.filter(c => c.userId === selectedUserId);
+        }
+        return crmData.customers; // Admin with "all" selected
+    }, [crmData.customers, user.role, user.id, selectedUserId]);
 
-        // Users listener
-        unsubscribes.push(onSnapshot(collection(db, "users"), (snapshot) => {
-            setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-        }));
-        
-        // Settings listeners
-        unsubscribes.push(onSnapshot(collection(db, "settings", "config", "statuses"), (snapshot) => {
-            setSettings(s => ({...s, statuses: snapshot.docs.map(doc => doc.data() as Status)}));
-        }));
-        unsubscribes.push(onSnapshot(collection(db, "settings", "config", "carModels"), (snapshot) => {
-            setSettings(s => ({...s, carModels: snapshot.docs.map(doc => doc.data() as CarModel)}));
-        }));
-        unsubscribes.push(onSnapshot(collection(db, "settings", "config", "customerSources"), (snapshot) => {
-            setSettings(s => ({...s, customerSources: snapshot.docs.map(doc => doc.data() as CustomerSource)}));
-        }));
+    // Filter reminders based on user role and selection
+    const filteredReminders = useMemo(() => {
+        if (user.role === Role.USER) {
+            return crmData.reminders.filter(r => r.userId === user.id);
+        }
+        if (user.role === Role.ADMIN && selectedUserId !== 'all') {
+            return crmData.reminders.filter(r => r.userId === selectedUserId);
+        }
+        return crmData.reminders; // Admin with "all" selected
+    }, [crmData.reminders, user.role, user.id, selectedUserId]);
 
-        // Data listeners (customers, reminders) based on user role
-        const customerQuery = user.role === Role.ADMIN ? collection(db, "customers") : query(collection(db, "customers"), where("userId", "==", user.id));
-        unsubscribes.push(onSnapshot(customerQuery, (snapshot) => {
-            setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
-        }));
-        
-        const reminderQuery = user.role === Role.ADMIN ? collection(db, "reminders") : query(collection(db, "reminders"), where("userId", "==", user.id));
-        unsubscribes.push(onSnapshot(reminderQuery, (snapshot) => {
-            setReminders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder)));
-        }));
-
-        setIsLoading(false);
-        return () => unsubscribes.forEach(unsub => unsub());
-    }, [user.id, user.role]);
-    
-    // Centralized filtering logic
+    // Data visible in lists, filtered by role AND search term.
     const filteredCustomers = useMemo(() => {
-        let customersToFilter = customers;
+        let customersToFilter = crmData.customers;
         
-        // Filter by selected user (for admin)
-        if (user.role === 'admin' && selectedUserId !== 'all') {
+        // Apply role-based filtering first
+        if (user.role === Role.USER) {
+            customersToFilter = customersToFilter.filter(customer => customer.userId === user.id);
+        } else if (user.role === Role.ADMIN && selectedUserId !== 'all') {
+            // Admin has a dropdown to filter, but can see all
             customersToFilter = customersToFilter.filter(customer => customer.userId === selectedUserId);
         }
         
-        // Filter by search term
+        // Then, apply search term filtering to the result
         if (!searchTerm.trim()) return customersToFilter;
+
         const term = searchTerm.toLowerCase();
         return customersToFilter.filter(c => 
             c.name.toLowerCase().includes(term) || 
@@ -761,80 +860,100 @@ const MainLayout: React.FC = () => {
             (c.source && c.source.toLowerCase().includes(term)) ||
             (c.city && c.city.toLowerCase().includes(term))
         );
-    }, [customers, searchTerm, user.role, selectedUserId]);
+    }, [crmData.customers, searchTerm, user.role, user.id, selectedUserId]);
 
-    // HANDLERS (now interact with Firestore)
-    const handleSaveCustomer = async (customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
+    // HANDLERS (now interact with local state, which triggers save effect)
+    const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
         if (existingCustomerId) { // Update
-            const customerRef = doc(db, 'customers', existingCustomerId);
-            await updateDoc(customerRef, { ...customerData, lastContactDate: Date.now() });
+            setCrmData(prev => ({
+                ...prev,
+                customers: prev.customers.map(c => c.id === existingCustomerId ? { ...c, ...customerData, lastContactDate: Date.now() } : c)
+            }));
         } else { // Create
-            const newCustomer: Omit<Customer, 'id'> = {
+            const newCustomer: Customer = {
                 ...customerData,
+                id: 'cust_' + Date.now(),
                 userId: user.id,
                 createdDate: Date.now(),
                 lastContactDate: Date.now(),
                 interactions: [],
             };
-            await addDoc(collection(db, 'customers'), newCustomer);
+            setCrmData(prev => ({ ...prev, customers: [...prev.customers, newCustomer] }));
         }
     };
 
-    const handleDeleteCustomer = async (customerId: string) => {
-        const customerRef = doc(db, 'customers', customerId);
-        // Also delete associated reminders
-        const remindersQuery = query(collection(db, "reminders"), where("customerId", "==", customerId));
-        const remindersSnapshot = await getDocs(remindersQuery);
-        
-        const batch = writeBatch(db);
-        remindersSnapshot.forEach(doc => batch.delete(doc.ref));
-        batch.delete(customerRef);
-        await batch.commit();
-        
-        setDeleteConfirm({ isOpen: false, customerId: '' });
+    const handleDelete = () => {
+        const { id, type } = deleteConfirm;
+        if (type === 'customer') {
+            setCrmData(prev => ({
+                ...prev,
+                customers: prev.customers.filter(c => c.id !== id),
+                reminders: prev.reminders.filter(r => r.customerId !== id)
+            }));
+        }
+        // Deletion logic for settings will be handled within the SettingsPanel component
+        setDeleteConfirm({ isOpen: false, id: '', type: '' });
     };
 
-    const handleCustomerUpdate = async (customerId: string, updates: Partial<Customer>) => {
-        const customerRef = doc(db, 'customers', customerId);
-        await updateDoc(customerRef, { ...updates, lastContactDate: Date.now() });
+    const handleCustomerUpdate = (customerId: string, updates: Partial<Customer>) => {
+        setCrmData(prev => ({
+            ...prev,
+            customers: prev.customers.map(c => c.id === customerId ? { ...c, ...updates, lastContactDate: Date.now() } : c)
+        }));
     };
 
     const handleAddInteraction = (customerId: string, interaction: Omit<Interaction, 'id'>) => {
-        const customer = customers.find(c => c.id === customerId);
-        if(!customer) return;
-        const updatedInteractions = [...(customer.interactions || []), { ...interaction, id: 'int_' + Date.now() }];
-        handleCustomerUpdate(customerId, { interactions: updatedInteractions });
+        const newInteraction = { ...interaction, id: 'int_' + Date.now() };
+        setCrmData(prev => ({
+            ...prev,
+            customers: prev.customers.map(c => c.id === customerId ? { ...c, interactions: [...(c.interactions || []), newInteraction] } : c)
+        }));
     };
 
     const handleDeleteInteraction = (customerId: string, interactionId: string) => {
-        const customer = customers.find(c => c.id === customerId);
-        if (!customer) return;
-        const updatedInteractions = (customer.interactions || []).filter(i => i.id !== interactionId);
-        handleCustomerUpdate(customerId, { interactions: updatedInteractions });
+         setCrmData(prev => ({
+            ...prev,
+            customers: prev.customers.map(c => c.id === customerId ? { ...c, interactions: c.interactions.filter(i => i.id !== interactionId) } : c)
+        }));
     };
     
     const handleGenerateScript = async (customer: Customer) => {
         setScriptModal({ isOpen: true, script: '', isLoading: true });
-        const script = await GeminiService.generateScript(customer, user.name);
-        setScriptModal({ isOpen: true, script, isLoading: false });
+        try {
+            const script = await GeminiService.generateScript(customer, user.name);
+            setScriptModal({ isOpen: true, script, isLoading: false });
+        } catch (error) {
+            console.error("Failed to generate script from UI:", error);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+            setScriptModal({
+                isOpen: true,
+                script: `Đã xảy ra lỗi khi tạo kịch bản:\n${errorMessage}`,
+                isLoading: false
+            });
+        }
     };
 
-    const handleSaveReminder = async (reminderData: Omit<Reminder, 'id'>, existingReminderId?: string) => {
+    const handleSaveReminder = (reminderData: Omit<Reminder, 'id'>, existingReminderId?: string) => {
         if (existingReminderId) {
-            await updateDoc(doc(db, "reminders", existingReminderId), reminderData);
+            setCrmData(prev => ({
+                ...prev,
+                reminders: prev.reminders.map(r => r.id === existingReminderId ? { ...r, ...reminderData } : r)
+            }));
         } else {
-            await addDoc(collection(db, "reminders"), reminderData);
+            const newReminder = { ...reminderData, id: 'rem_' + Date.now() };
+            setCrmData(prev => ({ ...prev, reminders: [...prev.reminders, newReminder] }));
         }
     };
     
-    const handleDeleteReminder = async (reminderId: string) => {
-        await deleteDoc(doc(db, "reminders", reminderId));
+    const handleDeleteReminder = (reminderId: string) => {
+        setCrmData(prev => ({ ...prev, reminders: prev.reminders.filter(r => r.id !== reminderId) }));
     };
 
-    const handleToggleReminderComplete = async (reminderId: string) => {
-        const reminder = reminders.find(r => r.id === reminderId);
-        if (!reminder) return;
-        await updateDoc(doc(db, "reminders", reminderId), { completed: !reminder.completed });
+    const handleToggleReminderComplete = (reminderId: string) => {
+        setCrmData(prev => ({
+            ...prev,
+            reminders: prev.reminders.map(r => r.id === reminderId ? { ...r, completed: !r.completed } : r)
+        }));
     };
     
     // Modal openers/closers
@@ -910,19 +1029,24 @@ const MainLayout: React.FC = () => {
                     </div>
                 </header>
                 <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                   {activeView === 'dashboard' && <Dashboard customers={customers} statuses={settings.statuses} reminders={reminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={handleToggleReminderComplete} onDeleteReminder={handleDeleteReminder} onOpenCustomer={openEditCustomer} />}
-                   {activeView === 'reminders' && <RemindersView reminders={reminders} customers={customers} onOpenReminderModal={openReminderModal} onToggleComplete={handleToggleReminderComplete} onDelete={handleDeleteReminder} />}
-                   {activeView === 'kanban' && <KanbanView customers={filteredCustomers} statuses={settings.statuses} reminders={reminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} searchTerm={searchTerm} />}
-                   {activeView === 'list' && <ListView customers={filteredCustomers} statuses={settings.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, customerId: id})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} />}
-                   {activeView === 'reports' && user.role === 'admin' && <ReportsView customers={customers} users={users} statuses={settings.statuses} carModels={settings.carModels} customerSources={settings.customerSources} />}
-                   {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} settings={settings} />}
+                   {activeView === 'dashboard' && <Dashboard customers={dashboardCustomers} statuses={crmData.statuses} reminders={filteredReminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={handleToggleReminderComplete} onDeleteReminder={handleDeleteReminder} onOpenCustomer={openEditCustomer} />}
+                   {activeView === 'reminders' && <RemindersView reminders={filteredReminders} customers={dashboardCustomers} onOpenReminderModal={openReminderModal} onToggleComplete={handleToggleReminderComplete} onDelete={handleDeleteReminder} />}
+                   {activeView === 'kanban' && <KanbanView customers={filteredCustomers} statuses={crmData.statuses} reminders={filteredReminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, id, type: 'customer'})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} searchTerm={searchTerm} />}
+                   {activeView === 'list' && <ListView customers={filteredCustomers} statuses={crmData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, id, type: 'customer'})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} />}
+                   {activeView === 'reports' && user.role === 'admin' && <ReportsView crmData={crmData} users={users} />}
+                   {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} crmData={crmData} setUsers={setUsers} setCrmData={setCrmData} />}
                 </main>
             </div>
             
-            <CustomerForm isOpen={showCustomerForm} onClose={closeCustomerForm} onSave={handleSaveCustomer} customer={editingCustomer} statuses={settings.statuses} carModels={settings.carModels} customerSources={settings.customerSources} />
-            <ConfirmationModal isOpen={deleteConfirm.isOpen} title="Xác nhận xóa" message="Bạn có chắc chắn muốn xóa khách hàng này không? Mọi nhắc hẹn liên quan cũng sẽ bị xóa." onConfirm={() => handleDeleteCustomer(deleteConfirm.customerId)} onCancel={() => setDeleteConfirm({ isOpen: false, customerId: '' })} />
+            <CustomerForm isOpen={showCustomerForm} onClose={closeCustomerForm} onSave={handleSaveCustomer} customer={editingCustomer} statuses={crmData.statuses} carModels={crmData.carModels} customerSources={crmData.customerSources} />
+            <ConfirmationModal 
+                isOpen={deleteConfirm.isOpen} 
+                title="Xác nhận xóa" 
+                message={deleteConfirm.type === 'customer' ? "Bạn có chắc chắn muốn xóa khách hàng này không? Mọi nhắc hẹn liên quan cũng sẽ bị xóa." : `Xóa mục này sẽ không xóa khách hàng liên quan, nhưng bạn sẽ cần cập nhật họ sau. Bạn chắc chứ?`}
+                onConfirm={handleDelete} 
+                onCancel={() => setDeleteConfirm({ isOpen: false, id: '', type: '' })} />
             <ScriptModal isOpen={scriptModal.isOpen} isLoading={scriptModal.isLoading} script={scriptModal.script} onClose={() => setScriptModal({isOpen: false, script: '', isLoading: false})} />
-            <ReminderFormModal isOpen={showReminderForm} onClose={closeReminderModal} onSave={handleSaveReminder} reminder={editingReminder} customerId={activeReminderCustomerId} customers={customers} user={user} />
+            <ReminderFormModal isOpen={showReminderForm} onClose={closeReminderModal} onSave={handleSaveReminder} reminder={editingReminder} customerId={activeReminderCustomerId} customers={crmData.customers} user={user} />
         </div>
     );
 };
@@ -964,7 +1088,7 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
                     <div key={status.id} className="kanban-column flex-shrink-0 w-80 bg-gray-50 rounded-xl p-3" onDrop={(e) => handleDrop(e, status.id)} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
                          <div className="flex justify-between items-center mb-4 px-1">
                             <h3 className="font-semibold flex items-center text-gray-800">
-                                <span className={`w-3 h-3 rounded-full ${status.color} mr-2`}></span>
+                                <span className={`w-3 h-3 rounded-full mr-2`} style={{ backgroundColor: status.color }}></span>
                                 {status.name}
                             </h3>
                             <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">{customersByStatus[status.id]?.length || 0}</span>
@@ -1177,7 +1301,7 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
                 );
             case 'statusId':
                 const status = statuses.find(s => s.id === customer.statusId);
-                return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status?.color} text-white`}>{status?.name || '---'}</span>;
+                return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full text-white`} style={{backgroundColor: status?.color || '#ccc'}}>{status?.name || '---'}</span>;
             case 'salesValue':
                 return <span className="text-sm text-green-600 font-semibold">{formatCurrency(customer.salesValue)}</span>;
             case 'userId':
@@ -1218,7 +1342,7 @@ const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit,
                                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                             >
                                 <option value="all">Tất cả nhân viên</option>
-                                {users.map(user => (
+                                {users.filter(u => u.role === Role.USER).map(user => (
                                     <option key={user.id} value={user.id}>{user.name}</option>
                                 ))}
                             </select>
@@ -1591,7 +1715,7 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
     }, [data]);
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border">
+        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Hiệu suất theo Dòng xe</h3>
                 <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
@@ -1600,10 +1724,59 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
             </div>
             
             {data.length > 0 ? (
-                <>
+                <div className="flex-grow">
                     <div className="mb-6 chart-container h-[350px]">
                         <canvas ref={chartRef}></canvas>
                     </div>
+                </div>
+            ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
+            )}
+        </div>
+    );
+};
+
+const EmployeeSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        let chart: Chart | null = null;
+        if (chartRef.current && data.length > 0) {
+            chart = new Chart(chartRef.current, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d['Nhân viên']),
+                    datasets: [{
+                        label: 'Doanh số',
+                        data: data.map(d => d.rawRevenue),
+                        backgroundColor: '#4f46e5',
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => `Doanh số: ${formatCurrency(ctx.raw as number)}` } }
+                    },
+                    scales: { y: { beginAtZero: true, ticks: { callback: (v) => typeof v === 'number' ? (v >= 1e9 ? `${v / 1e9}B` : `${v / 1e6}M`) : v } } }
+                }
+            });
+        }
+        return () => { chart?.destroy() };
+    }, [data]);
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Hiệu suất theo Nhân viên</h3>
+                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
+                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
+                </button>
+            </div>
+            {data.length > 0 ? (
+                <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
@@ -1614,4 +1787,671 @@ const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ 
                             </tbody>
                         </table>
                     </div>
+                    <div className="chart-container h-[250px] lg:h-auto">
+                        <canvas ref={chartRef}></canvas>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
+            )}
+        </div>
+    );
+}
+
+const LeadSourceReport: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
+    const pieChartRef = useRef<HTMLCanvasElement>(null);
+    const barChartRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        const charts: Chart[] = [];
+        if (pieChartRef.current && data.length > 0) {
+            charts.push(new Chart(pieChartRef.current, {
+                type: 'pie',
+                data: {
+                    labels: data.map(d => d['Nguồn']),
+                    datasets: [{ data: data.map(d => d['Số lượng KH']), backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#8B5CF6'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            }));
+        }
+        if (barChartRef.current && data.length > 0) {
+            charts.push(new Chart(barChartRef.current, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d['Nguồn']),
+                    datasets: [{ label: 'Doanh số', data: data.map(d => d.rawRevenue), backgroundColor: '#10B981', borderRadius: 4, }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `Doanh số: ${formatCurrency(ctx.raw as number)}` } } },
+                    scales: { x: { beginAtZero: true, ticks: { callback: (v) => typeof v === 'number' ? (v >= 1e9 ? `${v / 1e9}B` : `${v / 1e6}M`) : v } } }
+                }
+            }));
+        }
+        return () => { charts.forEach(c => c.destroy()); };
+    }, [data]);
+    
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Hiệu quả Nguồn Khách hàng</h3>
+                 <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
+                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
+                </button>
+            </div>
+             {data.length > 0 ? (
+                <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                    <div className="chart-container h-[250px]"><canvas ref={pieChartRef}></canvas></div>
+                    <div className="chart-container h-[250px]"><canvas ref={barChartRef}></canvas></div>
+                </div>
+            ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
+            )}
+        </div>
+    );
+};
+
+const CAC_LTV_Report: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+    useEffect(() => {
+        let chart: Chart | null = null;
+        if (chartRef.current && data.length > 0) {
+            chart = new Chart(chartRef.current, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d['Nguồn']),
+                    datasets: [{
+                        label: 'Tỷ lệ LTV:CAC',
+                        data: data.map(d => d.rawRatio),
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => `Tỷ lệ: ${(ctx.raw as number).toFixed(1)}:1` } }
+                    },
+                    scales: { x: { beginAtZero: true, title: { display: true, text: 'Tỷ lệ LTV:CAC' } } }
+                }
+            });
+        }
+        return () => { chart?.destroy() };
+    }, [data]);
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Chi phí Thu hút (CAC) vs LTV</h3>
+                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
+                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
+                </button>
+            </div>
+            {data.length > 0 ? (
+                <div className="flex-grow grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>{Object.keys(data[0]).filter(k => !k.startsWith('raw')).map(key => <th key={key} className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).filter(k => !k.startsWith('raw')).map(key => <td key={key} className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="chart-container h-[250px] xl:h-auto">
+                        <canvas ref={chartRef}></canvas>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
+            )}
+        </div>
+    );
+};
+
+
+const ReportsView: React.FC<{ crmData: CrmData, users: User[] }> = ({ crmData, users }) => {
+    const { customers, statuses, carModels, customerSources, marketingSpends } = crmData;
+    const deliveredStatusId = useMemo(() => statuses.find(s => s.type === 'delivered')?.id, [statuses]);
+
+    const carModelData = useMemo(() => {
+        if (!deliveredStatusId) return [];
+        const deliveredCustomers = customers.filter(c => c.statusId === deliveredStatusId);
+        const groupedByModel = deliveredCustomers.reduce((acc, customer) => {
+            const modelName = customer.carModel || "Chưa xác định";
+            if (!acc[modelName]) acc[modelName] = { count: 0, revenue: 0 };
+            acc[modelName].count++;
+            acc[modelName].revenue += customer.salesValue;
+            return acc;
+        }, {} as Record<string, { count: number, revenue: number }>);
+
+        return Object.entries(groupedByModel).map(([model, data]) => ({ "Dòng xe": model, "Số xe đã giao": data.count, "Doanh số": formatCurrency(data.revenue), rawRevenue: data.revenue }))
+            .sort((a, b) => b.rawRevenue - a.rawRevenue);
+    }, [customers, deliveredStatusId, carModels]);
+
+    const employeeSalesData = useMemo(() => {
+        if (!deliveredStatusId) return [];
+        const salesUsers = users.filter(u => u.role === Role.USER);
+        const deliveredCustomers = customers.filter(c => c.statusId === deliveredStatusId);
+
+        return salesUsers.map(user => {
+            const userSales = deliveredCustomers.filter(c => c.userId === user.id);
+            const totalCustomers = customers.filter(c => c.userId === user.id).length;
+            const totalRevenue = userSales.reduce((sum, c) => sum + c.salesValue, 0);
+            const conversionRate = totalCustomers > 0 ? (userSales.length / totalCustomers) * 100 : 0;
+            return {
+                "Nhân viên": user.name,
+                "Doanh số": formatCurrency(totalRevenue),
+                "Số xe đã giao": userSales.length,
+                "Tổng KH": totalCustomers,
+                "Tỷ lệ chốt": `${conversionRate.toFixed(1)}%`,
+                rawRevenue: totalRevenue
+            };
+        }).sort((a,b) => b.rawRevenue - a.rawRevenue);
+    }, [customers, users, deliveredStatusId]);
+
+    const leadSourceData = useMemo(() => {
+        if (!deliveredStatusId) return [];
+        const deliveredCustomers = customers.filter(c => c.statusId === deliveredStatusId);
+         const groupedBySource = customerSources.map(source => {
+             const sourceCustomers = customers.filter(c => c.source === source.name);
+             const sourceRevenue = deliveredCustomers.filter(c => c.source === source.name).reduce((sum, c) => sum + c.salesValue, 0);
+             return {
+                "Nguồn": source.name,
+                "Số lượng KH": sourceCustomers.length,
+                "Doanh số": formatCurrency(sourceRevenue),
+                rawRevenue: sourceRevenue,
+             }
+         }).sort((a,b) => b.rawRevenue - a.rawRevenue);
+        return groupedBySource;
+    }, [customers, customerSources, deliveredStatusId]);
+
+    const cacLtvData = useMemo(() => {
+        if (!deliveredStatusId) return [];
+        return customerSources.map(source => {
+            const sourceCustomers = customers.filter(c => c.source === source.name);
+            const deliveredSourceCustomers = sourceCustomers.filter(c => c.statusId === deliveredStatusId);
+            
+            const totalRevenue = deliveredSourceCustomers.reduce((sum, c) => sum + c.salesValue, 0);
+            const marketingSpend = marketingSpends.find(s => s.name === source.name)?.amount || 0;
+
+            const ltv = deliveredSourceCustomers.length > 0 ? totalRevenue / deliveredSourceCustomers.length : 0;
+            const cac = sourceCustomers.length > 0 ? marketingSpend / sourceCustomers.length : 0;
+            const ratio = cac > 0 ? ltv / cac : 0;
+
+            return {
+                "Nguồn": source.name,
+                "Tổng KH": sourceCustomers.length,
+                "LTV": formatCurrency(ltv),
+                "Chi phí (CAC)": formatCurrency(cac),
+                "Tỷ lệ LTV:CAC": ratio > 0 ? `${ratio.toFixed(1)}:1` : "N/A",
+                rawLtv: ltv,
+                rawCac: cac,
+                rawRatio: ratio,
+            }
+        }).sort((a,b) => b.rawRatio - a.rawRatio);
+    }, [customers, customerSources, marketingSpends, deliveredStatusId]);
+
+    const handleExport = (data: any[], filename: string) => {
+         if (data.length === 0) { alert("Không có dữ liệu để xuất."); return; }
+        const headers = Object.keys(data[0]).filter(k => !k.startsWith('raw')).join(',');
+        const rows = data.map(row => Object.keys(row).filter(k => !k.startsWith('raw')).map(key => {
+            const cell = String(row[key]).includes(',') ? `"${row[key]}"` : row[key];
+            return cell;
+        }).join(','));
+        const csvContent = [headers, ...rows].join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${filename}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    };
+
+    return (
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold">Báo cáo Kinh doanh</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="lg:col-span-2">
+                    <EmployeeSalesReport data={employeeSalesData} onExport={() => handleExport(employeeSalesData, 'bao_cao_nhan_vien')} />
+                </div>
+                <div className="lg:col-span-2">
+                     <CAC_LTV_Report data={cacLtvData} onExport={() => handleExport(cacLtvData, 'bao_cao_cac_ltv')} />
+                </div>
+                <div>
+                    <LeadSourceReport data={leadSourceData} onExport={() => handleExport(leadSourceData, 'bao_cao_nguon_khach_hang')} />
+                </div>
+                <div>
+                    <CarModelSalesReport data={carModelData} onExport={() => handleExport(carModelData, 'bao_cao_doanh_so_dong_xe')} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+const ReminderFormModal: React.FC<{ isOpen: boolean, onClose: () => void, onSave: (data: Omit<Reminder, 'id'>, id?: string) => void, reminder: Reminder | null, customerId: string | null, customers: Customer[], user: User }> = ({isOpen, onClose, onSave, reminder, customerId, customers, user}) => {
+    const [formData, setFormData] = useState({ title: '', description: '', dueDate: '', priority: 'medium' as Reminder['priority'], customerId: ''});
+
+    useEffect(() => {
+        if (isOpen) {
+            if (reminder) {
+                setFormData({
+                    title: reminder.title,
+                    description: reminder.description,
+                    dueDate: reminder.dueDate ? new Date(reminder.dueDate).toISOString().substring(0, 16) : '',
+                    priority: reminder.priority,
+                    customerId: reminder.customerId,
+                });
+            } else {
+                 const today = new Date();
+                 today.setHours(9, 0, 0, 0);
+                 setFormData({
+                    title: '',
+                    description: '',
+                    dueDate: today.toISOString().substring(0, 16),
+                    priority: 'medium',
+                    customerId: customerId || '',
+                });
+            }
+        }
+    }, [isOpen, reminder, customerId]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!formData.title || !formData.dueDate || !formData.customerId) {
+            alert("Vui lòng điền đủ thông tin: Tiêu đề, Ngày hẹn và Khách hàng.");
+            return;
+        }
+        const submissionData = {
+            ...formData,
+            dueDate: new Date(formData.dueDate).getTime(),
+            userId: user.id,
+            completed: reminder?.completed || false,
+        };
+        onSave(submissionData, reminder?.id);
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={isOpen} title={reminder ? "Sửa Nhắc hẹn" : "Thêm Nhắc hẹn"} onClose={onClose}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Khách hàng</label>
+                     <select value={formData.customerId} onChange={e => setFormData(p => ({...p, customerId: e.target.value}))} className="w-full p-2 border rounded-lg" disabled={!!customerId && !reminder}>
+                        <option value="">-- Chọn khách hàng --</option>
+                        {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
+                    </select>
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Tiêu đề</label>
+                    <input type="text" value={formData.title} onChange={e => setFormData(p => ({...p, title: e.target.value}))} className="w-full p-2 border rounded-lg" />
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Ngày giờ hẹn</label>
+                    <input type="datetime-local" value={formData.dueDate} onChange={e => setFormData(p => ({...p, dueDate: e.target.value}))} className="w-full p-2 border rounded-lg" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Độ ưu tiên</label>
+                    <select value={formData.priority} onChange={e => setFormData(p => ({...p, priority: e.target.value as Reminder['priority']}))} className="w-full p-2 border rounded-lg">
+                        <option value="high">Cao</option>
+                        <option value="medium">Trung bình</option>
+                        <option value="low">Thấp</option>
+                    </select>
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Mô tả</label>
+                    <textarea value={formData.description} onChange={e => setFormData(p => ({...p, description: e.target.value}))} rows={3} className="w-full p-2 border rounded-lg"></textarea>
+                </div>
+                <div className="flex justify-end space-x-3 pt-4 border-t">
+                    <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg">Hủy</button>
+                    <button type="submit" className="px-6 py-2 bg-indigo-600 text-white rounded-lg">{reminder ? "Cập nhật" : "Lưu"}</button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+
+const UpcomingRemindersWidget: React.FC<{reminders: Reminder[], customers: Customer[], onEditReminder: (rem: Reminder) => void, onToggleComplete: (id: string) => void, onDeleteReminder: (id: string) => void, onOpenCustomer: (customer: Customer) => void }> = ({reminders, customers, onEditReminder, onToggleComplete, onDeleteReminder, onOpenCustomer}) => {
+    const upcomingReminders = useMemo(() => {
+        return reminders
+            .filter(r => !r.completed)
+            .sort((a,b) => a.dueDate - b.dueDate)
+            .slice(0, 5);
+    }, [reminders]);
+    
+    const priorityConfig = {
+        high: { label: 'Cao', color: 'bg-red-500'},
+        medium: { label: 'TB', color: 'bg-yellow-500'},
+        low: { label: 'Thấp', color: 'bg-green-500'},
+    }
+
+    const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || '...';
+    
+    return (
+        <div>
+            <h3 className="text-lg font-semibold mb-4">Nhắc hẹn sắp tới</h3>
+            {upcomingReminders.length > 0 ? (
+                <ul className="space-y-3">
+                    {upcomingReminders.map(rem => (
+                         <li key={rem.id} className="p-3 border rounded-lg flex items-start space-x-3 hover:bg-gray-50">
+                             <input type="checkbox" checked={rem.completed} onChange={() => onToggleComplete(rem.id)} className="mt-1 h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"/>
+                            <div className="flex-1">
+                                <p className="font-medium text-gray-800">{rem.title}</p>
+                                <p className="text-sm text-gray-600">Với KH: <button onClick={() => {
+                                    const customer = customers.find(c => c.id === rem.customerId);
+                                    if(customer) onOpenCustomer(customer);
+                                }} className="text-indigo-600 hover:underline">{getCustomerName(rem.customerId)}</button></p>
+                                <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
+                                    <span className="flex items-center"><ClockIcon className="w-3 h-3 mr-1"/>{formatDateTime(rem.dueDate)}</span>
+                                    <span className="flex items-center"><span className={`w-2 h-2 rounded-full ${priorityConfig[rem.priority].color} mr-1`}></span>{priorityConfig[rem.priority].label}</span>
+                                </div>
+                            </div>
+                             <div className="flex items-center space-x-1">
+                                 <button onClick={() => onEditReminder(rem)} className="p-1 text-gray-400 hover:text-indigo-600"><Edit2Icon className="w-4 h-4"/></button>
+                                 <button onClick={() => onDeleteReminder(rem.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2Icon className="w-4 h-4"/></button>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <div className="text-center py-8 text-gray-500">
+                    <CheckCircleIcon className="w-10 h-10 mx-auto text-green-500 mb-2"/>
+                    <p>Không có nhắc hẹn nào sắp tới.</p>
+                </div>
+            )}
+        </div>
+    )
+};
+
+
+const RemindersView: React.FC<{reminders: Reminder[], customers: Customer[], onOpenReminderModal: (customerId: string | null, reminder?: Reminder) => void, onToggleComplete: (id: string) => void, onDelete: (id: string) => void}> = ({reminders, customers, onOpenReminderModal, onToggleComplete, onDelete}) => {
+    const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('pending');
+    
+    const filteredReminders = useMemo(() => {
+        let sorted = [...reminders].sort((a,b) => a.dueDate - b.dueDate);
+        if (filter === 'completed') return sorted.filter(r => r.completed);
+        if (filter === 'pending') return sorted.filter(r => !r.completed);
+        return sorted;
+    }, [reminders, filter]);
+
+    const getCustomerInfo = (id: string) => customers.find(c => c.id === id);
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold">Quản lý Nhắc hẹn</h2>
+                <button onClick={() => onOpenReminderModal(null)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center">
+                    <PlusIcon className="w-4 h-4 mr-2"/> Thêm Nhắc hẹn
+                </button>
+            </div>
+            <div className="flex items-center space-x-2 border-b mb-4 pb-2">
+                 <button onClick={() => setFilter('pending')} className={`px-3 py-1 rounded-full text-sm ${filter === 'pending' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Chưa hoàn thành</button>
+                 <button onClick={() => setFilter('completed')} className={`px-3 py-1 rounded-full text-sm ${filter === 'completed' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Đã hoàn thành</button>
+                 <button onClick={() => setFilter('all')} className={`px-3 py-1 rounded-full text-sm ${filter === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Tất cả</button>
+            </div>
+            <div className="space-y-3">
+                {filteredReminders.map(rem => (
+                    <div key={rem.id} className={`p-4 border rounded-lg flex items-start space-x-4 ${rem.completed ? 'bg-gray-50 opacity-70' : 'bg-white'}`}>
+                        <input type="checkbox" checked={rem.completed} onChange={() => onToggleComplete(rem.id)} className="mt-1 h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
+                        <div className="flex-1">
+                            <p className={`font-medium ${rem.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>{rem.title}</p>
+                            <p className="text-sm text-gray-600">{rem.description}</p>
+                             <div className="mt-2 text-sm text-gray-500">
+                                <p><strong>KH:</strong> {getCustomerInfo(rem.customerId)?.name || 'N/A'} - {getCustomerInfo(rem.customerId)?.phone}</p>
+                                <p><strong>Hẹn lúc:</strong> {formatDateTime(rem.dueDate)}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                             <button onClick={() => onOpenReminderModal(null, rem)} className="p-2 text-gray-500 hover:text-indigo-600"><Edit2Icon className="w-5 h-5"/></button>
+                             <button onClick={() => onDelete(rem.id)} className="p-2 text-gray-500 hover:text-red-600"><Trash2Icon className="w-5 h-5"/></button>
+                        </div>
+                    </div>
+                ))}
+                 {filteredReminders.length === 0 && <div className="text-center p-8 text-gray-500">Không có nhắc hẹn nào.</div>}
+            </div>
+        </div>
+    );
+};
+
+const EditableSettingList = <T extends { id: string, name: string }>({ title, items, onUpdate, icon, itemType, allowDrag = false }: { title: string, items: T[], onUpdate: (newItems: T[]) => void, icon: React.ReactNode, itemType: string, allowDrag?: boolean }) => {
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editData, setEditData] = useState<Partial<T> | null>(null);
+    const [isAdding, setIsAdding] = useState(false);
+    const [newData, setNewData] = useState<Partial<T>>({ name: '' });
+    const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: '' });
+
+    const handleEdit = (item: T) => {
+        setEditingId(item.id);
+        setEditData(item);
+    };
+
+    const handleCancel = () => {
+        setEditingId(null);
+        setEditData(null);
+    };
+
+    const handleSave = (id: string) => {
+        if (!editData || !editData.name?.trim()) {
+            alert("Tên không được để trống.");
+            return;
+        }
+        const updatedItems = items.map(item => item.id === id ? { ...item, ...editData } : item);
+        onUpdate(updatedItems);
+        handleCancel();
+    };
+
+    const handleAdd = () => {
+        if (!newData.name?.trim()) {
+            alert("Tên không được để trống.");
+            return;
+        }
+        const newItem = { ...newData, id: `${itemType}_${Date.now()}` } as T;
+        onUpdate([...items, newItem]);
+        setIsAdding(false);
+        // FIX: Add type assertion to reset state with generic type to avoid type inference error.
+        setNewData({} as Partial<T>);
+    };
+
+    const handleDelete = () => {
+        const {id} = deleteConfirm;
+        onUpdate(items.filter(item => item.id !== id));
+        setDeleteConfirm({ isOpen: false, id: '' });
+    };
+
+    // Drag and Drop handlers
+    const dragItem = useRef<number | null>(null);
+    const dragOverItem = useRef<number | null>(null);
+
+    const handleDragSort = () => {
+        if (dragItem.current === null || dragOverItem.current === null) return;
+        const newItems = [...items];
+        const [draggedItem] = newItems.splice(dragItem.current, 1);
+        newItems.splice(dragOverItem.current, 0, draggedItem);
+        dragItem.current = null;
+        dragOverItem.current = null;
+        onUpdate(newItems);
+    };
+
+    const renderItemContent = (item: T) => {
+        if (itemType === 'statuses') {
+            const status = item as unknown as Status;
+            return (
+                 <div className="flex items-center">
+                    {allowDrag && <GripVerticalIcon className="w-5 h-5 text-gray-400 cursor-grab mr-2"/>}
+                    <div className="w-5 h-5 rounded-full border" style={{ backgroundColor: status.color }}></div>
+                    <span className="ml-3">{status.name}</span>
+                    <span className="ml-auto text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{status.type}</span>
+                </div>
+            );
+        }
+        if (itemType === 'marketingSpends') {
+            const spend = item as unknown as MarketingSpend;
+            return (
+                <div className="flex items-center w-full">
+                    <span>{spend.name}</span>
+                    <span className="ml-auto font-semibold text-green-600">{formatCurrency(spend.amount)}</span>
+                </div>
+            );
+        }
+        return <span className="flex-1">{item.name}</span>;
+    }
+    
+    // FIX: Use functional updates for state setters to ensure correct type inference with generics.
+    // The original `setData(d => ...)` was incorrect because `setData`'s signature only accepted a value, not a function.
+    // The most pragmatic fix is to use a non-functional update, which is safe in this context and avoids complex type gymnastics.
+    const renderEditForm = (data: Partial<T>, setData: (data: Partial<T> | null) => void) => (
+        <div className="flex-1 flex items-center gap-2">
+            <input type="text" value={data.name || ''} onChange={e => setData({ ...data, name: e.target.value })} className="w-full p-1 border rounded-md" placeholder="Tên"/>
+            {itemType === 'statuses' && (
+                <>
+                    {/* FIX: Cast object to Partial<T> to resolve generic type error on 'color' property. */}
+                    <input type="color" value={(data as Partial<Status>).color || '#ffffff'} onChange={e => setData({ ...data, color: e.target.value } as Partial<T>)} className="h-8 w-10 p-0 border-none rounded-md cursor-pointer"/>
+                    {/* FIX: Cast object to Partial<T> to resolve generic type error on 'type' property. */}
+                    <select value={(data as Partial<Status>).type || 'pipeline'} onChange={e => setData({ ...data, type: e.target.value as Status['type'] } as Partial<T>)} className="p-1 border rounded-md">
+                        <option value="pipeline">Pipeline</option>
+                        <option value="win">Win</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="lostsale">Lostsale</option>
+                    </select>
                 </>
+            )}
+            {itemType === 'marketingSpends' && (
+                 // FIX: Cast object to Partial<T> to resolve generic type error on 'amount' property.
+                 <input type="number" value={(data as Partial<MarketingSpend>).amount || ''} onChange={e => setData({ ...data, amount: Number(e.target.value) } as Partial<T>)} className="w-full p-1 border rounded-md" placeholder="Chi phí (VNĐ)"/>
+            )}
+        </div>
+    );
+    
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border">
+             <ConfirmationModal 
+                isOpen={deleteConfirm.isOpen} 
+                title="Xác nhận xóa" 
+                message={`Xóa mục này sẽ không xóa khách hàng liên quan, nhưng bạn sẽ cần cập nhật họ sau. Bạn chắc chứ?`}
+                onConfirm={handleDelete} 
+                onCancel={() => setDeleteConfirm({ isOpen: false, id: '' })} />
+            <h3 className="text-lg font-semibold flex items-center mb-4">{icon} {title}</h3>
+            <div className="space-y-2">
+                {items.map((item, index) => (
+                    <div key={item.id} 
+                         className="flex items-center p-2 rounded-lg hover:bg-gray-50"
+                         draggable={allowDrag}
+                         onDragStart={() => (dragItem.current = index)}
+                         onDragEnter={() => (dragOverItem.current = index)}
+                         onDragEnd={handleDragSort}
+                         onDragOver={(e) => e.preventDefault()}
+                    >
+                        {editingId === item.id && editData ? (
+                            <>
+                                {renderEditForm(editData, setEditData)}
+                                <div className="flex items-center space-x-2 ml-4">
+                                    <button onClick={() => handleSave(item.id)} className="p-1 text-green-600 hover:bg-green-100 rounded-full"><CheckCircleIcon className="w-5 h-5"/></button>
+                                    <button onClick={handleCancel} className="p-1 text-gray-500 hover:bg-gray-100 rounded-full"><XIcon className="w-5 h-5"/></button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {renderItemContent(item)}
+                                <div className="flex items-center space-x-2 ml-auto">
+                                    <button onClick={() => handleEdit(item)} className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full"><Edit2Icon className="w-4 h-4"/></button>
+                                    <button onClick={() => setDeleteConfirm({isOpen: true, id: item.id})} className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-full"><Trash2Icon className="w-4 h-4"/></button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                ))}
+            </div>
+            {isAdding ? (
+                <div className="flex items-center p-2 mt-4 border-t pt-4">
+                    {renderEditForm(newData, setNewData as (data: Partial<T> | null) => void)}
+                     <div className="flex items-center space-x-2 ml-4">
+                        <button onClick={handleAdd} className="p-1 text-green-600 hover:bg-green-100 rounded-full"><CheckCircleIcon className="w-5 h-5"/></button>
+                        <button onClick={() => setIsAdding(false)} className="p-1 text-gray-500 hover:bg-gray-100 rounded-full"><XIcon className="w-5 h-5"/></button>
+                    </div>
+                </div>
+            ) : (
+                <button onClick={() => setIsAdding(true)} className="mt-4 w-full flex items-center justify-center px-4 py-2 border-2 border-dashed rounded-lg text-gray-500 hover:bg-gray-100 hover:border-indigo-500 hover:text-indigo-600 transition">
+                    <PlusIcon className="w-4 h-4 mr-2"/> Thêm mới
+                </button>
+            )}
+        </div>
+    );
+};
+
+
+const SettingsPanel: React.FC<{ users: User[], crmData: CrmData, setUsers: React.Dispatch<React.SetStateAction<User[]>>, setCrmData: React.Dispatch<React.SetStateAction<CrmData>> }> = ({ users, crmData, setUsers, setCrmData }) => {
+    
+    const seedInitialData = () => {
+        if (!window.confirm("Hành động này sẽ TẠO LẠI TOÀN BỘ dữ liệu mẫu, xóa hết dữ liệu hiện tại. Bạn có chắc chắn?")) return;
+        
+        const { users: newUsers, crmData: newCrmData } = dataService.seedData();
+        setUsers(newUsers);
+        setCrmData(newCrmData);
+        alert("Dữ liệu mẫu đã được khởi tạo thành công! Vui lòng tải lại trang nếu cần.");
+    };
+
+    const deleteAllData = () => {
+        if (!window.confirm("CẢNH BÁO: Hành động này sẽ XÓA TOÀN BỘ DỮ LIỆU KHÁCH HÀNG, NHẮC HẸN và CÀI ĐẶT trong hệ thống. Dữ liệu tài khoản người dùng sẽ không bị ảnh hưởng. Hành động này không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục không?")) return;
+
+        const { users: currentUsers, crmData: clearedCrmData } = dataService.deleteAllCrmData();
+        setUsers(currentUsers); // Users are preserved
+        setCrmData(clearedCrmData);
+        alert("Đã xóa toàn bộ dữ liệu CRM thành công!");
+    };
+
+    return (
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold">Cài đặt Hệ thống</h2>
+            <div className="bg-white p-6 rounded-xl shadow-sm border">
+                <h3 className="text-lg font-semibold mb-2">Quản lý Dữ liệu</h3>
+                <p className="text-sm text-gray-500 mb-4">Sử dụng các nút này để thiết lập ban đầu hoặc dọn dẹp hệ thống.</p>
+                <div className="flex space-x-4">
+                     <button onClick={seedInitialData} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Khởi tạo Dữ liệu Mẫu</button>
+                     <button onClick={deleteAllData} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Xóa Toàn bộ Dữ liệu CRM</button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <EditableSettingList 
+                    title="Trạng thái Pipeline"
+                    items={[...crmData.statuses].sort((a,b) => a.order - b.order)}
+                    onUpdate={(newStatuses) => setCrmData(prev => ({...prev, statuses: newStatuses.map((s, i) => ({...s, order: i+1})) }))}
+                    icon={<LayersIcon className="w-5 h-5 mr-2"/>}
+                    itemType="statuses"
+                    allowDrag={true}
+                 />
+                 <div className="space-y-6">
+                     <EditableSettingList 
+                        title="Dòng xe"
+                        items={crmData.carModels}
+                        onUpdate={(newModels) => setCrmData(prev => ({...prev, carModels: newModels}))}
+                        icon={<CarIcon className="w-5 h-5 mr-2"/>}
+                        itemType="model"
+                     />
+                     <EditableSettingList 
+                        title="Nguồn Khách hàng"
+                        items={crmData.customerSources}
+                        onUpdate={(newSources) => setCrmData(prev => ({...prev, customerSources: newSources}))}
+                        icon={<SearchIcon className="w-5 h-5 mr-2"/>}
+                        itemType="source"
+                     />
+                      <EditableSettingList
+                        title="Chi phí Marketing"
+                        items={crmData.marketingSpends}
+                        onUpdate={(newSpends) => setCrmData(prev => ({...prev, marketingSpends: newSpends}))}
+                        icon={<DollarSignIcon className="w-5 h-5 mr-2"/>}
+                        itemType="marketingSpends"
+                     />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+export default App;

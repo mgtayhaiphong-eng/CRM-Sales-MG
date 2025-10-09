@@ -3,11 +3,12 @@ import type { Customer } from '../types';
 
 // The API key MUST be obtained exclusively from the environment variable `process.env.API_KEY`.
 if (!process.env.API_KEY) {
-    console.error("Gemini API key is not set in environment variables.");
+    // Throw an error to ensure the application fails fast if the key is not configured.
+    throw new Error("Gemini API key is not set in environment variables.");
 }
 
 // FIX: Per @google/genai guidelines, initialize with process.env.API_KEY directly.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const GeminiService = {
     generateScript: async (customer: Customer, userName: string): Promise<string> => {
@@ -36,14 +37,15 @@ export const GeminiService = {
                 contents: prompt,
             });
 
+            if (!response.text) {
+                throw new Error("AI đã trả về một kịch bản trống.");
+            }
             return response.text;
 
         } catch (error) {
             console.error("Error generating content with Gemini API:", error);
-            if (error instanceof Error) {
-                return `Đã xảy ra lỗi khi tạo kịch bản: ${error.message}`;
-            }
-            return "Đã xảy ra lỗi không xác định khi tạo kịch bản.";
+            // Re-throw the error so it can be caught and handled by the UI component.
+            throw new Error(error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định khi tạo kịch bản.");
         }
     }
 };

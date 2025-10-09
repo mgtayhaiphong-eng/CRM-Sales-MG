@@ -1,4 +1,3 @@
-
 // FIX: Moved Role enum from App.tsx to here to break the circular dependency.
 export enum Role {
   ADMIN = 'admin',
@@ -74,6 +73,12 @@ export interface SalesGoal {
     // Define structure later if needed
 }
 
+export interface MarketingSpend {
+    id: string;
+    name: string; // Corresponds to the CustomerSource name
+    amount: number;
+}
+
 export interface CrmData {
   customers: Customer[];
   statuses: Status[];
@@ -81,4 +86,5 @@ export interface CrmData {
   customerSources: CustomerSource[];
   reminders: Reminder[];
   salesGoals: SalesGoal[];
+  marketingSpends: MarketingSpend[];
 }
