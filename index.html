@@ -64,6 +64,14 @@
         .sidebar-mobile.open {
             transform: translateX(0);
         }
+
+        /* Skeleton Loader Animation */
+        @keyframes pulse {
+            50% { opacity: .6; }
+        }
+        .skeleton-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
