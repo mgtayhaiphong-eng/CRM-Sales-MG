@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, createContext
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData, type MarketingSpend } from './types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from './constants';
 import { GeminiService } from './services/geminiService';
-import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement } from 'chart.js';
+import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement, Filler } from 'chart.js';
 
 // Register Chart.js components
-Chart.register(DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement);
+Chart.register(DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement, Filler);
 
 
 // START: MOCK DATA & LOCAL STORAGE SERVICE
@@ -72,7 +72,6 @@ const dataService = {
         if (storedData) {
             try {
                 const parsedData = JSON.parse(storedData);
-                // Simple check to see if data is from an old structure
                 if (parsedData.crmData && parsedData.crmData.customers && parsedData.crmData.customers.length > 0) {
                      return parsedData;
                 }
@@ -80,7 +79,6 @@ const dataService = {
                 console.error("Could not parse data from localStorage, resetting.", e);
             }
         }
-        // If no data, parse error, or empty customers, seed initial data
         return dataService.seedData();
     },
     saveData: (users: User[], crmData: CrmData) => {
@@ -94,17 +92,14 @@ const dataService = {
         const users: User[] = MOCK_USERS_SEED.map((user, index) => ({
             ...user,
             id: `user_${index + 1}`,
-            // In a real app, passwords should be hashed. For this local-only version, we'll use username as password.
             password: user.username 
         }));
         
-        // Assign user IDs from the newly created users array
         const user2Id = users.find(u => u.username === 'user')?.id || 'user_2';
         const user3Id = users.find(u => u.username === 'user2')?.id || 'user_3';
 
         const seededCrmData = { ...MOCK_INITIAL_DATA };
         seededCrmData.customers.forEach(customer => {
-            // This logic distributes the mock customers between the two mock users.
             customer.userId = customer.id.endsWith('2') || customer.id.endsWith('5') || customer.id.endsWith('7') || customer.id.endsWith('9') || customer.id.endsWith('11') || customer.id.endsWith('13') || customer.id.endsWith('15') ? user2Id : user3Id;
         });
          seededCrmData.reminders.forEach(reminder => {
@@ -116,7 +111,7 @@ const dataService = {
         return initialData;
     },
     deleteAllCrmData: (): { users: User[], crmData: CrmData } => {
-        const { users } = dataService.getData(); // Keep existing users
+        const { users } = dataService.getData();
         const emptyCrmData: CrmData = {
             customers: [], reminders: [], salesGoals: [],
             statuses: MOCK_INITIAL_DATA.statuses, 
@@ -130,6 +125,53 @@ const dataService = {
     }
 };
 // END: MOCK DATA & LOCAL STORAGE SERVICE
+
+// START: NOTIFICATION SYSTEM
+interface NotificationType {
+    id: number;
+    message: string;
+    type: 'success' | 'error';
+}
+
+interface NotificationContextType {
+    addNotification: (message: string, type: 'success' | 'error') => void;
+}
+
+const NotificationContext = createContext<NotificationContextType | null>(null);
+
+const useNotification = () => {
+    const context = useContext(NotificationContext);
+    if (!context) throw new Error("useNotification must be used within a NotificationProvider");
+    return context;
+};
+
+const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [notifications, setNotifications] = useState<NotificationType[]>([]);
+
+    const addNotification = useCallback((message: string, type: 'success' | 'error') => {
+        const id = Date.now();
+        setNotifications(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== id));
+        }, 4000);
+    }, []);
+
+    return (
+        <NotificationContext.Provider value={{ addNotification }}>
+            {children}
+            <div className="fixed top-5 right-5 z-[100] space-y-3">
+                {notifications.map(n => (
+                    <div key={n.id} className={`toast flex items-center p-4 rounded-lg shadow-lg text-white ${n.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                        {n.type === 'success' ? <CheckCircleIcon className="w-6 h-6 mr-3" /> : <AlertTriangleIcon className="w-6 h-6 mr-3" />}
+                        <span>{n.message}</span>
+                    </div>
+                ))}
+            </div>
+        </NotificationContext.Provider>
+    );
+};
+
+// END: NOTIFICATION SYSTEM
 
 
 // START: HELPER FUNCTIONS & AUTH CONTEXT
@@ -168,7 +210,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         
         if (user) {
             const userToStore = { ...user };
-            delete userToStore.password; // Don't store password in session storage
+            delete userToStore.password;
             sessionStorage.setItem('currentUser', JSON.stringify(userToStore));
             setCurrentUser(userToStore);
             setLoading(false);
@@ -190,7 +232,9 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
     return (
         <AuthContext.Provider value={{ currentUser, login, logout }}>
-            {children}
+            <NotificationProvider>
+                {children}
+            </NotificationProvider>
         </AuthContext.Provider>
     );
 };
@@ -236,6 +280,9 @@ const FileTextIcon = ({ className = "w-5 h-5" }) => <Icon className={className}>
 const DownloadIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></Icon>;
 const BellIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></Icon>;
 const CheckCircleIcon = ({ className = "w-5 h-5" }) => <Icon className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></Icon>;
+const MenuIcon = ({ className = "w-6 h-6" }) => <Icon className={className}><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>;
+const FolderPlusIcon = ({ className = "w-12 h-12" }) => <Icon className={className}><path d="M20 12h-8"/><path d="M16 16V8"/><path d="M2 17.6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-2h4l2 2h4a2 2 0 0 1 2 2v2.4"/></Icon>;
+
 // END: ICONS
 
 
@@ -263,7 +310,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children, maxWidt
         if (e.target === e.currentTarget) onClose();
     };
     return (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex justify-center items-start pt-8 sm:pt-16 p-4" onClick={handleBackdropClick}>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex justify-center items-start pt-8 sm:pt-16 p-4 animate-fade-in" onClick={handleBackdropClick}>
             <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} transform transition-all duration-300`}>
                 <div className="p-5 border-b flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-xl">
                     <h3 className="text-xl font-bold text-gray-800">{title}</h3>
@@ -303,15 +350,14 @@ interface ScriptModalProps {
     onClose: () => void;
 }
 const ScriptModal: React.FC<ScriptModalProps> = ({ isOpen, isLoading, script, onClose }) => {
-    const [copySuccess, setCopySuccess] = useState('');
+    const { addNotification } = useNotification();
 
     const copyToClipboard = () => {
         if (!script) return;
         navigator.clipboard.writeText(script).then(() => {
-            setCopySuccess('Đã sao chép!');
-            setTimeout(() => setCopySuccess(''), 2000);
+            addNotification('Đã sao chép kịch bản!', 'success');
         }, () => {
-            setCopySuccess('Sao chép thất bại!');
+            addNotification('Sao chép thất bại!', 'error');
         });
     };
 
@@ -327,7 +373,6 @@ const ScriptModal: React.FC<ScriptModalProps> = ({ isOpen, isLoading, script, on
                     <>
                         <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap text-gray-800 border min-h-[150px]">{script}</div>
                         <div className="mt-4 flex justify-end items-center space-x-3">
-                            {copySuccess && <span className="text-sm text-green-600">{copySuccess}</span>}
                             <button onClick={copyToClipboard} className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100 transition">Sao chép</button>
                         </div>
                     </>
@@ -336,6 +381,21 @@ const ScriptModal: React.FC<ScriptModalProps> = ({ isOpen, isLoading, script, on
         </Modal>
     );
 };
+
+const EmptyState: React.FC<{
+    icon: React.ReactNode;
+    title: string;
+    message: string;
+    action?: React.ReactNode;
+}> = ({ icon, title, message, action }) => (
+    <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed">
+        <div className="text-gray-400 mx-auto mb-4">{icon}</div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-1">{title}</h3>
+        <p className="mb-4">{message}</p>
+        {action}
+    </div>
+);
+
 
 // END: REUSABLE UI COMPONENTS
 
@@ -349,6 +409,7 @@ interface InteractionHistoryProps {
 }
 const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer, onAddInteraction, onDeleteInteraction, users }) => {
     const { currentUser } = useAuth();
+    const { addNotification } = useNotification();
     const [newInteraction, setNewInteraction] = useState({ type: 'call', notes: '', duration: 0, outcome: 'neutral' });
     const [isAdding, setIsAdding] = useState(false);
     const [isGeneratingScript, setIsGeneratingScript] = useState(false);
@@ -363,8 +424,24 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer, onAdd
         { value: 'other', label: '📝 Khác', color: 'bg-gray-100 text-gray-800' }
     ];
 
+    const getInteractionPlaceholder = (type: string): string => {
+        switch(type) {
+            case 'test_drive':
+                return "Ghi lại phản hồi của khách hàng sau khi lái thử, các điểm họ thích/không thích, lộ trình đã đi...";
+            case 'quotation':
+                return "Ghi chú về báo giá đã gửi, các hạng mục, chương trình khuyến mãi đi kèm...";
+            case 'meeting':
+                return "Tóm tắt nội dung cuộc gặp, các cam kết hoặc các bước tiếp theo...";
+            default:
+                return "Mô tả nội dung tương tác, phản hồi của khách hàng...";
+        }
+    };
+
     const handleAddInteraction = () => {
-        if (!newInteraction.notes.trim()) { alert('Vui lòng nhập nội dung tương tác'); return; }
+        if (!newInteraction.notes.trim()) { 
+            addNotification('Vui lòng nhập nội dung tương tác', 'error');
+            return; 
+        }
         if (!currentUser) return;
         
         onAddInteraction({
@@ -387,7 +464,7 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer, onAdd
             setNewInteraction(prev => ({ ...prev, notes: script }));
         } catch (error) {
             console.error("Failed to generate script", error);
-            alert("Không thể tạo kịch bản. Vui lòng thử lại.");
+            addNotification("Không thể tạo kịch bản. Vui lòng thử lại.", 'error');
         } finally {
             setIsGeneratingScript(false);
         }
@@ -406,9 +483,45 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer, onAdd
 
             {isAdding && (
                 <div className="p-4 border rounded-lg bg-gray-50/70 animate-fade-in-right space-y-3">
-                    <textarea placeholder="Mô tả nội dung tương tác..." value={newInteraction.notes} onChange={(e) => setNewInteraction(p => ({ ...p, notes: e.target.value }))} rows={5} className="w-full p-2 border rounded-lg" />
-                    <div className="flex justify-between items-center gap-2">
-                         <button
+                    <textarea 
+                        placeholder={getInteractionPlaceholder(newInteraction.type)} 
+                        value={newInteraction.notes} 
+                        onChange={(e) => setNewInteraction(p => ({ ...p, notes: e.target.value }))} 
+                        rows={4} 
+                        className="w-full p-2 border rounded-lg" 
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs font-medium text-gray-600">Loại</label>
+                            <select value={newInteraction.type} onChange={(e) => setNewInteraction(p => ({ ...p, type: e.target.value }))} className="p-2 border rounded-lg w-full mt-1">
+                                {interactionTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-gray-600">Kết quả</label>
+                            <select value={newInteraction.outcome} onChange={(e) => setNewInteraction(p => ({ ...p, outcome: e.target.value as Interaction['outcome'] }))} className="p-2 border rounded-lg w-full mt-1">
+                                <option value="positive">✅ Tích cực</option>
+                                <option value="neutral">⚪ Trung lập</option>
+                                <option value="negative">❌ Tiêu cực</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {['call', 'meeting', 'test_drive'].includes(newInteraction.type) && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Thời lượng (phút)</label>
+                            <input 
+                                type="number"
+                                value={newInteraction.duration}
+                                onChange={(e) => setNewInteraction(p => ({ ...p, duration: parseInt(e.target.value, 10) || 0 }))}
+                                className="w-full p-2 border rounded-lg mt-1"
+                                min="0"
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-2">
+                        <button
                             type="button"
                             onClick={handleGenerateScript}
                             disabled={isGeneratingScript}
@@ -420,23 +533,16 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer, onAdd
                                 <><SparklesIcon className="w-4 h-4 mr-2" /> Gợi ý AI</>
                             )}
                         </button>
-                        <div className="flex-grow grid grid-cols-2 gap-2">
-                            <select value={newInteraction.type} onChange={(e) => setNewInteraction(p => ({ ...p, type: e.target.value }))} className="p-2 border rounded-lg w-full">
-                                {interactionTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
-                            </select>
-                            <select value={newInteraction.outcome} onChange={(e) => setNewInteraction(p => ({ ...p, outcome: e.target.value }))} className="p-2 border rounded-lg w-full">
-                                <option value="positive">✅ Tích cực</option>
-                                <option value="neutral">⚪ Trung lập</option>
-                                <option value="negative">❌ Tiêu cực</option>
-                            </select>
+                        <div className="flex space-x-2">
+                             <button onClick={() => setIsAdding(false)} className="px-4 py-2 border rounded-lg text-sm">Hủy</button>
+                             <button onClick={handleAddInteraction} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm flex items-center">
+                                 <SaveIcon className="w-4 h-4 mr-2" /> Lưu
+                             </button>
                         </div>
-                    </div>
-                    <div className="flex justify-end space-x-2 pt-2">
-                         <button onClick={() => setIsAdding(false)} className="px-3 py-1 border rounded-lg text-sm">Hủy</button>
-                         <button onClick={handleAddInteraction} className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm">Lưu</button>
                     </div>
                 </div>
             )}
+
 
             <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar pr-2">
                 {interactions.length === 0 ? (
@@ -455,13 +561,18 @@ const InteractionHistory: React.FC<InteractionHistoryProps> = ({ customer, onAdd
                                         <span className={`px-2 py-1 text-xs rounded-full ${typeConfig?.color}`}>{typeConfig?.label}</span>
                                         <span className="text-xs text-gray-500">{formatDateTime(interaction.date)}</span>
                                     </div>
-                                    <button onClick={() => onDeleteInteraction(interaction.id)} className="text-gray-400 hover:text-red-500"><Trash2Icon className="w-4 h-4"/></button>
+                                    <button aria-label="Xóa tương tác" onClick={() => onDeleteInteraction(interaction.id)} className="text-gray-400 hover:text-red-500"><Trash2Icon className="w-4 h-4"/></button>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <span className="text-lg mt-0.5">{outcomeIcons[interaction.outcome]}</span>
                                     <div className="flex-1">
                                         <p className="text-sm text-gray-800">{interaction.notes}</p>
-                                        <p className="text-xs text-gray-400 mt-1">bởi: {getUserName(interaction.userId)}</p>
+                                        <div className="flex items-center text-xs text-gray-400 mt-1">
+                                            <span>bởi: {getUserName(interaction.userId)}</span>
+                                            {interaction.duration > 0 && (
+                                                 <span className="ml-3 flex items-center"><ClockIcon className="w-3 h-3 mr-1"/> {interaction.duration} phút</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -485,7 +596,7 @@ const Highlight: React.FC<{ text: string | undefined; highlight: string }> = ({ 
     return (
         <>
             {parts.map((part, i) =>
-                regex.test(part) ? (
+                i % 2 === 1 ? (
                     <mark key={i} className="bg-yellow-200 p-0 rounded-sm">
                         {part}
                     </mark>
@@ -519,7 +630,7 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminde
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all">
+        <div className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
             <div className="p-4">
                 <div className="flex justify-between items-start mb-2">
                     <h3 className="font-semibold text-lg truncate pr-2 min-w-0"><Highlight text={customer.name} highlight={searchTerm} /></h3>
@@ -567,10 +678,10 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, statuses, reminde
             )}
             
             <div className="p-3 border-t bg-gray-50 rounded-b-xl flex justify-end items-center space-x-2">
-                <button onClick={() => onOpenReminderModal(customer.id)} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-full" title="Đặt lịch hẹn"><BellIcon className="w-5 h-5"/></button>
-                <button onClick={() => onGenerateScript(customer)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Tạo kịch bản chăm sóc AI"><SparklesIcon className="w-5 h-5"/></button>
-                <button onClick={() => onCustomerEdit(customer)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full" title="Chỉnh sửa"><Edit2Icon className="w-5 h-5"/></button>
-                <button onClick={() => onDelete(customer.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-full" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
+                <button aria-label="Đặt lịch hẹn" onClick={() => onOpenReminderModal(customer.id)} className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-full transition-colors" title="Đặt lịch hẹn"><BellIcon className="w-5 h-5"/></button>
+                <button aria-label="Tạo kịch bản chăm sóc AI" onClick={() => onGenerateScript(customer)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors" title="Tạo kịch bản chăm sóc AI"><SparklesIcon className="w-5 h-5"/></button>
+                <button aria-label="Chỉnh sửa khách hàng" onClick={() => onCustomerEdit(customer)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="Chỉnh sửa"><Edit2Icon className="w-5 h-5"/></button>
+                <button aria-label="Xóa khách hàng" onClick={() => onDelete(customer.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
             </div>
         </div>
     );
@@ -782,16 +893,16 @@ const MainLayout: React.FC = () => {
     const { currentUser: user, logout } = useAuth();
     if (!user) return null;
 
+    const { addNotification } = useNotification();
     const [activeView, setActiveView] = useState('dashboard');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUserId, setSelectedUserId] = useState('all');
+    const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-    // Local Storage Data State
     const [users, setUsers] = useState<User[]>([]);
     const [crmData, setCrmData] = useState<CrmData>({ customers: [], statuses: [], carModels: [], customerSources: [], reminders: [], salesGoals: [], marketingSpends: [] });
     const [isLoading, setIsLoading] = useState(true);
 
-    // Initial data load
     useEffect(() => {
         const { users: loadedUsers, crmData: loadedCrmData } = dataService.getData();
         setUsers(loadedUsers);
@@ -799,14 +910,12 @@ const MainLayout: React.FC = () => {
         setIsLoading(false);
     }, []);
 
-    // Persist data to localStorage on change
     useEffect(() => {
         if (!isLoading) {
             dataService.saveData(users, crmData);
         }
     }, [users, crmData, isLoading]);
     
-    // Modals state
     const [showCustomerForm, setShowCustomerForm] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: '', type: '' });
@@ -815,7 +924,6 @@ const MainLayout: React.FC = () => {
     const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
     const [activeReminderCustomerId, setActiveReminderCustomerId] = useState<string | null>(null);
 
-    // Data visible to the current user based on their role, ignoring search term.
     const dashboardCustomers = useMemo(() => {
         if (user.role === Role.USER) {
             return crmData.customers.filter(c => c.userId === user.id);
@@ -823,10 +931,9 @@ const MainLayout: React.FC = () => {
         if (user.role === Role.ADMIN && selectedUserId !== 'all') {
             return crmData.customers.filter(c => c.userId === selectedUserId);
         }
-        return crmData.customers; // Admin with "all" selected
+        return crmData.customers;
     }, [crmData.customers, user.role, user.id, selectedUserId]);
 
-    // Filter reminders based on user role and selection
     const filteredReminders = useMemo(() => {
         if (user.role === Role.USER) {
             return crmData.reminders.filter(r => r.userId === user.id);
@@ -834,22 +941,18 @@ const MainLayout: React.FC = () => {
         if (user.role === Role.ADMIN && selectedUserId !== 'all') {
             return crmData.reminders.filter(r => r.userId === selectedUserId);
         }
-        return crmData.reminders; // Admin with "all" selected
+        return crmData.reminders;
     }, [crmData.reminders, user.role, user.id, selectedUserId]);
 
-    // Data visible in lists, filtered by role AND search term.
     const filteredCustomers = useMemo(() => {
         let customersToFilter = crmData.customers;
         
-        // Apply role-based filtering first
         if (user.role === Role.USER) {
             customersToFilter = customersToFilter.filter(customer => customer.userId === user.id);
         } else if (user.role === Role.ADMIN && selectedUserId !== 'all') {
-            // Admin has a dropdown to filter, but can see all
             customersToFilter = customersToFilter.filter(customer => customer.userId === selectedUserId);
         }
         
-        // Then, apply search term filtering to the result
         if (!searchTerm.trim()) return customersToFilter;
 
         const term = searchTerm.toLowerCase();
@@ -862,14 +965,14 @@ const MainLayout: React.FC = () => {
         );
     }, [crmData.customers, searchTerm, user.role, user.id, selectedUserId]);
 
-    // HANDLERS (now interact with local state, which triggers save effect)
     const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
-        if (existingCustomerId) { // Update
+        if (existingCustomerId) {
             setCrmData(prev => ({
                 ...prev,
                 customers: prev.customers.map(c => c.id === existingCustomerId ? { ...c, ...customerData, lastContactDate: Date.now() } : c)
             }));
-        } else { // Create
+            addNotification('Cập nhật khách hàng thành công!', 'success');
+        } else {
             const newCustomer: Customer = {
                 ...customerData,
                 id: 'cust_' + Date.now(),
@@ -879,6 +982,7 @@ const MainLayout: React.FC = () => {
                 interactions: [],
             };
             setCrmData(prev => ({ ...prev, customers: [...prev.customers, newCustomer] }));
+            addNotification('Thêm khách hàng mới thành công!', 'success');
         }
     };
 
@@ -890,8 +994,8 @@ const MainLayout: React.FC = () => {
                 customers: prev.customers.filter(c => c.id !== id),
                 reminders: prev.reminders.filter(r => r.customerId !== id)
             }));
+            addNotification('Đã xóa khách hàng.', 'success');
         }
-        // Deletion logic for settings will be handled within the SettingsPanel component
         setDeleteConfirm({ isOpen: false, id: '', type: '' });
     };
 
@@ -901,13 +1005,14 @@ const MainLayout: React.FC = () => {
             customers: prev.customers.map(c => c.id === customerId ? { ...c, ...updates, lastContactDate: Date.now() } : c)
         }));
     };
-
+    
     const handleAddInteraction = (customerId: string, interaction: Omit<Interaction, 'id'>) => {
         const newInteraction = { ...interaction, id: 'int_' + Date.now() };
         setCrmData(prev => ({
             ...prev,
             customers: prev.customers.map(c => c.id === customerId ? { ...c, interactions: [...(c.interactions || []), newInteraction] } : c)
         }));
+        addNotification('Đã thêm tương tác mới.', 'success');
     };
 
     const handleDeleteInteraction = (customerId: string, interactionId: string) => {
@@ -915,6 +1020,7 @@ const MainLayout: React.FC = () => {
             ...prev,
             customers: prev.customers.map(c => c.id === customerId ? { ...c, interactions: c.interactions.filter(i => i.id !== interactionId) } : c)
         }));
+         addNotification('Đã xóa tương tác.', 'success');
     };
     
     const handleGenerateScript = async (customer: Customer) => {
@@ -939,24 +1045,34 @@ const MainLayout: React.FC = () => {
                 ...prev,
                 reminders: prev.reminders.map(r => r.id === existingReminderId ? { ...r, ...reminderData } : r)
             }));
+            addNotification('Cập nhật nhắc hẹn thành công.', 'success');
         } else {
             const newReminder = { ...reminderData, id: 'rem_' + Date.now() };
             setCrmData(prev => ({ ...prev, reminders: [...prev.reminders, newReminder] }));
+            addNotification('Đã thêm nhắc hẹn mới.', 'success');
         }
     };
     
     const handleDeleteReminder = (reminderId: string) => {
         setCrmData(prev => ({ ...prev, reminders: prev.reminders.filter(r => r.id !== reminderId) }));
+        addNotification('Đã xóa nhắc hẹn.', 'success');
     };
 
     const handleToggleReminderComplete = (reminderId: string) => {
+        let isCompleted = false;
         setCrmData(prev => ({
             ...prev,
-            reminders: prev.reminders.map(r => r.id === reminderId ? { ...r, completed: !r.completed } : r)
+            reminders: prev.reminders.map(r => {
+                if (r.id === reminderId) {
+                    isCompleted = !r.completed;
+                    return { ...r, completed: isCompleted };
+                }
+                return r;
+            })
         }));
+        addNotification(isCompleted ? 'Đã hoàn thành nhắc hẹn!' : 'Đã đánh dấu chưa hoàn thành.', 'success');
     };
     
-    // Modal openers/closers
     const openAddCustomer = () => { setEditingCustomer(null); setShowCustomerForm(true); };
     const openEditCustomer = (customer: Customer) => { setEditingCustomer(customer); setShowCustomerForm(true); };
     const closeCustomerForm = () => { setShowCustomerForm(false); setEditingCustomer(null); };
@@ -983,58 +1099,83 @@ const MainLayout: React.FC = () => {
         ] : [])
     ];
     
+    const SidebarContent = () => (
+        <div className="flex flex-col h-full bg-white">
+            <div className="h-16 border-b flex items-center px-6 flex-shrink-0">
+               <BriefcaseIcon className="w-8 h-8 text-indigo-600"/>
+               <h1 className="text-xl font-bold ml-3">CRM Sales MG</h1>
+            </div>
+            <nav className="flex-1 py-6 px-4 space-y-2 overflow-y-auto">
+                {navItems.map(item => (
+                    <button key={item.id} onClick={() => { setActiveView(item.id); setIsMobileNavOpen(false); }} className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition ${activeView === item.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                        <item.icon className="mr-3"/>
+                        {item.label}
+                    </button>
+                ))}
+            </nav>
+             <div className="p-4 border-t flex-shrink-0">
+                 <div className="flex items-center mb-4">
+                    <UserCircleIcon className="w-10 h-10 text-gray-400"/>
+                    <div className="ml-3">
+                        <p className="font-semibold text-sm">{user.name}</p>
+                        <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                    </div>
+                 </div>
+                <button onClick={logout} className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-100">
+                    <LogOutIcon className="mr-3"/> Đăng xuất
+                </button>
+            </div>
+        </div>
+    );
+    
     if (isLoading) {
         return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
     }
 
     return (
         <div className="flex h-screen bg-gray-100">
-            <aside className="w-64 bg-white border-r flex flex-col flex-shrink-0">
-                <div className="h-16 border-b flex items-center px-6">
-                   <BriefcaseIcon className="w-8 h-8 text-indigo-600"/>
-                   <h1 className="text-xl font-bold ml-3">CRM Sales MG</h1>
-                </div>
-                <nav className="flex-1 py-6 px-4 space-y-2">
-                    {navItems.map(item => (
-                        <button key={item.id} onClick={() => setActiveView(item.id)} className={`w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition ${activeView === item.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-                            <item.icon className="mr-3"/>
-                            {item.label}
-                        </button>
-                    ))}
-                </nav>
-                 <div className="p-4 border-t">
-                     <div className="flex items-center mb-4">
-                        <UserCircleIcon className="w-10 h-10 text-gray-400"/>
-                        <div className="ml-3">
-                            <p className="font-semibold text-sm">{user.name}</p>
-                            <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-                        </div>
-                     </div>
-                    <button onClick={logout} className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-100">
-                        <LogOutIcon className="mr-3"/> Đăng xuất
-                    </button>
-                </div>
+            {/* Desktop Sidebar */}
+            <aside className="w-64 flex-shrink-0 hidden lg:block">
+                <SidebarContent />
             </aside>
+            
+            {/* Mobile Sidebar */}
+            {isMobileNavOpen && (
+                <div className="lg:hidden">
+                    <div className="sidebar-mobile-overlay animate-fade-in" onClick={() => setIsMobileNavOpen(false)}></div>
+                    <div className={`sidebar-mobile ${isMobileNavOpen ? 'open' : ''}`}>
+                        <SidebarContent />
+                    </div>
+                </div>
+            )}
+
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <header className="h-16 bg-white border-b flex items-center justify-between px-6 flex-shrink-0">
-                    <div className="relative w-96">
-                        <input type="text" placeholder="Tìm kiếm KH, SĐT, xe, nguồn, TP..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"/>
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><SearchIcon/></div>
+                <header className="h-16 bg-white border-b flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
+                    <div className="flex items-center">
+                        <button onClick={() => setIsMobileNavOpen(true)} className="lg:hidden mr-4 p-2 text-gray-600">
+                            <MenuIcon />
+                        </button>
+                         <div className="relative w-64 sm:w-96">
+                            <input type="text" placeholder="Tìm kiếm khách hàng..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"/>
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><SearchIcon/></div>
+                        </div>
                     </div>
                     <div>
                          <button onClick={openAddCustomer} className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition flex items-center">
-                           <PlusIcon className="w-4 h-4 mr-2" /> Thêm KH
+                           <PlusIcon className="w-4 h-4 mr-2" /> 
+                           <span className="hidden sm:inline">Thêm KH</span>
+                           <span className="sm:hidden">Thêm</span>
                         </button>
                     </div>
                 </header>
-                <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
                    {activeView === 'dashboard' && <Dashboard customers={dashboardCustomers} statuses={crmData.statuses} reminders={filteredReminders} onEditReminder={(rem) => openReminderModal(rem.customerId, rem)} onToggleComplete={handleToggleReminderComplete} onDeleteReminder={handleDeleteReminder} onOpenCustomer={openEditCustomer} />}
                    {activeView === 'reminders' && <RemindersView reminders={filteredReminders} customers={dashboardCustomers} onOpenReminderModal={openReminderModal} onToggleComplete={handleToggleReminderComplete} onDelete={handleDeleteReminder} />}
                    {activeView === 'kanban' && <KanbanView customers={filteredCustomers} statuses={crmData.statuses} reminders={filteredReminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(id) => setDeleteConfirm({isOpen: true, id, type: 'customer'})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} searchTerm={searchTerm} />}
-                   {activeView === 'list' && <ListView customers={filteredCustomers} statuses={crmData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, id, type: 'customer'})} onGenerateScript={handleGenerateScript} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} />}
+                   {activeView === 'list' && <ListView customers={filteredCustomers} statuses={crmData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(id) => setDeleteConfirm({isOpen: true, id, type: 'customer'})} onGenerateScript={handleGenerateScript} onAddCustomer={openAddCustomer} users={users} currentUser={user} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} />}
                    {activeView === 'reports' && user.role === 'admin' && <ReportsView crmData={crmData} users={users} />}
-                   {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} crmData={crmData} setUsers={setUsers} setCrmData={setCrmData} />}
+                   {activeView === 'settings' && user.role === 'admin' && <SettingsPanel users={users} crmData={crmData} setUsers={setUsers} setCrmData={setCrmData} addNotification={addNotification}/>}
                 </main>
             </div>
             
@@ -1093,16 +1234,16 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
                             </h3>
                             <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">{customersByStatus[status.id]?.length || 0}</span>
                         </div>
-                        <div className="space-y-3 min-h-[200px] max-h-[calc(100vh-220px)] overflow-y-auto custom-scrollbar pr-1">
-                            {customersByStatus[status.id]?.map(customer => (
+                        <div className="space-y-3 min-h-[200px] max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar pr-1">
+                             {customersByStatus[status.id]?.length > 0 ? customersByStatus[status.id]?.map(customer => (
                                 <div key={customer.id} draggable onDragStart={() => setDraggedCustomerId(customer.id)}>
                                     <CustomerCard 
                                         customer={customer} 
-                                        statuses={statuses}
+                                        statuses={statuses} 
                                         reminders={reminders}
                                         onCustomerEdit={onCustomerEdit} 
                                         onDelete={onDelete} 
-                                        onStatusChange={(customerId, newStatusId) => onCustomerUpdate(customerId, {statusId: newStatusId})}
+                                        onStatusChange={ (id, newStatus) => onCustomerUpdate(id, {statusId: newStatus}) }
                                         onAddInteraction={onAddInteraction}
                                         onDeleteInteraction={onDeleteInteraction}
                                         onGenerateScript={onGenerateScript}
@@ -1111,11 +1252,8 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
                                         searchTerm={searchTerm}
                                     />
                                 </div>
-                            ))}
-                            {(!customersByStatus[status.id] || customersByStatus[status.id].length === 0) && (
-                                 <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-lg">
-                                     <p className="text-sm">Kéo thả khách hàng vào đây</p>
-                                 </div>
+                            )) : (
+                                <div className="p-4 text-center text-sm text-gray-500 border-2 border-dashed rounded-lg">Kéo khách hàng vào đây</div>
                             )}
                         </div>
                     </div>
@@ -1123,1335 +1261,1011 @@ const KanbanView: React.FC<Omit<CustomerCardProps, 'customer' | 'onStatusChange'
             </div>
         </div>
     );
-}
+};
 
 interface ListViewProps {
     customers: Customer[];
     statuses: Status[];
-    onCustomerEdit: (c: Customer) => void;
+    onCustomerEdit: (customer: Customer) => void;
     onCustomerDelete: (id: string) => void;
-    onGenerateScript: (c: Customer) => void;
+    onGenerateScript: (customer: Customer) => void;
+    onAddCustomer: () => void;
     users: User[];
     currentUser: User;
     selectedUserId: string;
     onSelectedUserChange: (userId: string) => void;
     searchTerm: string;
 }
-const ListView: React.FC<ListViewProps> = ({customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, users, currentUser, selectedUserId, onSelectedUserChange, searchTerm}) => {
-    const [sortField, setSortField] = useState<keyof Customer | 'userId'>('lastContactDate');
-    const [sortDirection, setSortDirection] = useState('desc');
+const ListView: React.FC<ListViewProps> = ({ customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, onAddCustomer, users, currentUser, selectedUserId, onSelectedUserChange, searchTerm }) => {
     
-    const allPossibleColumns = useMemo(() => [
-        { key: 'name', label: 'Khách hàng' },
-        { key: 'phone', label: 'Liên hệ' },
-        { key: 'carModel', label: 'Dòng xe' },
-        { key: 'source', label: 'Nguồn' },
-        { key: 'city', label: 'Thành Phố' },
-        { key: 'statusId', label: 'Trạng thái' },
-        { key: 'tier', label: 'Phân loại' },
-        { key: 'salesValue', label: 'Giá trị' },
-        ...(currentUser.role === 'admin' ? [{ key: 'userId', label: 'Nhân viên' }] : []),
-        { key: 'lastContactDate', label: 'L.Hệ cuối' },
-        { key: 'createdDate', label: 'Ngày tạo' },
-    ], [currentUser.role]);
+    const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
 
-    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-        new Set(['name', 'phone', 'statusId', 'salesValue', 'lastContactDate', ...(currentUser.role === 'admin' ? ['userId'] : [])])
+    return (
+        <div className="bg-white rounded-xl shadow p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <h2 className="text-xl font-bold text-gray-800">Danh sách Khách hàng ({customers.length})</h2>
+                {currentUser.role === Role.ADMIN && (
+                    <div>
+                        <label htmlFor="user-filter" className="text-sm font-medium mr-2">NV Sales:</label>
+                        <select id="user-filter" value={selectedUserId} onChange={e => onSelectedUserChange(e.target.value)} className="p-2 border rounded-lg bg-gray-50">
+                            <option value="all">Tất cả</option>
+                            {users.filter(u => u.role === Role.USER).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                        </select>
+                    </div>
+                )}
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                        <tr>
+                            <th scope="col" className="px-6 py-3">Tên</th>
+                            <th scope="col" className="px-6 py-3 hidden md:table-cell">SĐT</th>
+                            <th scope="col" className="px-6 py-3">Trạng thái</th>
+                            <th scope="col" className="px-6 py-3 hidden lg:table-cell">Phân loại</th>
+                            <th scope="col" className="px-6 py-3 hidden md:table-cell">Xe quan tâm</th>
+                            <th scope="col" className="px-6 py-3 hidden lg:table-cell">Ngày tạo</th>
+                            {currentUser.role === Role.ADMIN && <th scope="col" className="px-6 py-3 hidden lg:table-cell">NV Phụ trách</th>}
+                            <th scope="col" className="px-6 py-3 text-right">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {customers.map(customer => {
+                            const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
+                            const status = statuses.find(s => s.id === customer.statusId);
+                            return (
+                                <tr key={customer.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-gray-900"><Highlight text={customer.name} highlight={searchTerm} /></td>
+                                    <td className="px-6 py-4 hidden md:table-cell"><Highlight text={customer.phone} highlight={searchTerm} /></td>
+                                    <td className="px-6 py-4">
+                                        {status ? (
+                                            <span
+                                                className="px-2.5 py-1 text-xs font-semibold rounded-full inline-block whitespace-nowrap"
+                                                style={{
+                                                    backgroundColor: `${status.color}2A`,
+                                                    color: status.color
+                                                }}
+                                            >
+                                                {status.name}
+                                            </span>
+                                        ) : 'N/A'}
+                                    </td>
+                                    <td className="px-6 py-4 hidden lg:table-cell"><span className={`font-semibold ${tierConfig?.color}`}>{tierConfig?.value}</span></td>
+                                    <td className="px-6 py-4 hidden md:table-cell"><Highlight text={customer.carModel} highlight={searchTerm} /></td>
+                                    <td className="px-6 py-4 hidden lg:table-cell">{formatDate(customer.createdDate)}</td>
+                                    {currentUser.role === Role.ADMIN && <td className="px-6 py-4 hidden lg:table-cell">{getUserName(customer.userId)}</td>}
+                                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                                        <button aria-label="Tạo kịch bản AI" onClick={() => onGenerateScript(customer)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors" title="Tạo kịch bản"><SparklesIcon className="w-5 h-5"/></button>
+                                        <button aria-label="Chỉnh sửa" onClick={() => onCustomerEdit(customer)} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="Chỉnh sửa"><Edit2Icon className="w-5 h-5"/></button>
+                                        <button aria-label="Xóa" onClick={() => onCustomerDelete(customer.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+                 {customers.length === 0 && (
+                    <td colSpan={currentUser.role === Role.ADMIN ? 8 : 7}>
+                        <EmptyState 
+                            icon={<UsersIcon className="w-12 h-12"/>}
+                            title="Chưa có khách hàng nào"
+                            message="Hãy bắt đầu bằng cách thêm khách hàng mới để quản lý."
+                            action={<button onClick={onAddCustomer} className="mt-4 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition flex items-center mx-auto"><PlusIcon className="w-4 h-4 mr-2" /> Thêm khách hàng</button>}
+                        />
+                    </td>
+                )}
+            </div>
+        </div>
     );
+};
+
+const Dashboard: React.FC<{
+    customers: Customer[],
+    statuses: Status[],
+    reminders: Reminder[],
+    onEditReminder: (reminder: Reminder) => void,
+    onToggleComplete: (id: string) => void,
+    onDeleteReminder: (id: string) => void,
+    onOpenCustomer: (customer: Customer) => void,
+}> = ({ customers, statuses, reminders, onEditReminder, onToggleComplete, onDeleteReminder, onOpenCustomer }) => {
     
-    const [showColumnSelector, setShowColumnSelector] = useState(false);
-    const columnSelectorRef = useRef<HTMLDivElement>(null);
+    const stats = useMemo(() => {
+        const deliveredStatusIds = statuses.filter(s => s.type === 'delivered').map(s => s.id);
+        const winStatusIds = statuses.filter(s => s.type === 'win').map(s => s.id);
+        const lostStatusIds = statuses.filter(s => s.type === 'lostsale').map(s => s.id);
+
+        const newCustomersThisMonth = customers.filter(c => new Date(c.createdDate).getMonth() === new Date().getMonth() && new Date(c.createdDate).getFullYear() === new Date().getFullYear()).length;
+        const totalDelivered = customers.filter(c => deliveredStatusIds.includes(c.statusId));
+        const totalRevenue = totalDelivered.reduce((sum, c) => sum + c.salesValue, 0);
+        const totalLost = customers.filter(c => lostStatusIds.includes(c.statusId)).length;
+        
+        const totalPipeline = customers.filter(c => !deliveredStatusIds.includes(c.statusId) && !winStatusIds.includes(c.statusId) && !lostStatusIds.includes(c.statusId)).length;
+        
+        return {
+            newCustomersThisMonth,
+            totalRevenue,
+            carsSold: totalDelivered.length,
+            conversionRate: customers.length > 0 ? ((totalDelivered.length + winStatusIds.length) / (customers.length - totalPipeline) * 100).toFixed(1) + '%' : '0%',
+        };
+    }, [customers, statuses]);
+
+    return (
+        <div className="space-y-6">
+            <h1 className="text-2xl font-bold text-gray-800">Tổng quan</h1>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <StatCard title="Doanh thu tháng" value={formatCurrency(stats.totalRevenue)} icon={<DollarSignIcon />} />
+                 <StatCard title="Xe đã bán" value={stats.carsSold.toString()} icon={<TrendingUpIcon />} />
+                 <StatCard title="KH mới trong tháng" value={stats.newCustomersThisMonth.toString()} icon={<UsersIcon />} />
+                 <StatCard title="Tỷ lệ chuyển đổi" value={stats.conversionRate} icon={<TargetIcon />} />
+            </div>
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
+                    <h3 className="font-bold text-lg mb-4">Hoạt động Bán hàng (30 ngày qua)</h3>
+                     <div className="chart-container">
+                        <SalesOverTimeChart customers={customers} />
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6">
+                    <h3 className="font-bold text-lg mb-4">Phân bổ Pipeline</h3>
+                     <div className="chart-container">
+                        <PipelineDistributionChart customers={customers} statuses={statuses} />
+                    </div>
+                </div>
+            </div>
+            <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="font-bold text-lg mb-4">Nhắc hẹn sắp tới</h3>
+                <UpcomingReminders reminders={reminders} customers={customers} onEdit={onEditReminder} onToggleComplete={onToggleComplete} onDelete={onDeleteReminder} onOpenCustomer={onOpenCustomer} />
+            </div>
+        </div>
+    );
+};
+
+const StatCard: React.FC<{title: string, value: string, icon: React.ReactNode}> = ({ title, value, icon }) => (
+    <div className="bg-white rounded-xl shadow p-6 flex items-center transition-transform duration-200 hover:scale-105">
+        <div className="p-3 bg-indigo-100 rounded-full text-indigo-600 mr-4">
+            {icon}
+        </div>
+        <div>
+            <p className="text-sm text-gray-500">{title}</p>
+            <p className="text-2xl font-bold text-gray-800">{value}</p>
+        </div>
+    </div>
+);
+
+const SalesOverTimeChart: React.FC<{customers: Customer[]}> = ({ customers }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+    const chartInstance = useRef<Chart | null>(null);
 
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target as Node)) {
-                setShowColumnSelector(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    const sortedCustomers = useMemo(() => {
-        return [...customers].sort((a, b) => {
-            const aVal = a[sortField as keyof Customer];
-            const bVal = b[sortField as keyof Customer];
-
-            if (aVal === bVal) return 0;
-            if (aVal == null) return 1;
-            if (bVal == null) return -1;
-
-            if (typeof aVal === 'number' && typeof bVal === 'number') {
-                return aVal - bVal;
-            }
-            if (typeof aVal === 'string' && typeof bVal === 'string') {
-                return aVal.localeCompare(bVal);
-            }
-            
-            if (aVal > bVal) return 1;
-            if (bVal > aVal) return -1;
-            return 0;
-        });
-    }, [customers, sortField]);
-
-    const processedCustomers = useMemo(() => {
-        if (sortDirection === 'desc') {
-            return [...sortedCustomers].reverse();
-        }
-        return sortedCustomers;
-    }, [sortedCustomers, sortDirection]);
-
-    const handleSort = (field: keyof Customer | 'userId') => {
-        if (field === sortField) {
-            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortField(field);
-            setSortDirection('desc');
-        }
-    };
-    
-    const handleColumnToggle = (columnKey: string) => {
-        setVisibleColumns(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(columnKey)) {
-                if (newSet.size > 1) { 
-                    newSet.delete(columnKey);
-                }
-            } else {
-                newSet.add(columnKey);
-            }
-            return newSet;
-        });
-    };
-
-    const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'N/A';
-    
-    const getCellDataForExport = (customer: Customer, columnKey: string): string => {
-        switch (columnKey) {
-            case 'name': return customer.name;
-            case 'phone': return customer.phone;
-            case 'email': return customer.email || '';
-            case 'statusId': return statuses.find(s => s.id === customer.statusId)?.name.replace(/^\d+\.\s/, '') || '---';
-            case 'salesValue': return String(customer.salesValue);
-            case 'userId': return getUserName(customer.userId);
-            case 'lastContactDate': return customer.lastContactDate ? formatDate(customer.lastContactDate) : '';
-            case 'createdDate': return customer.createdDate ? formatDate(customer.createdDate) : '';
-            case 'carModel': return customer.carModel || '';
-            case 'source': return customer.source || '';
-            case 'city': return customer.city || '';
-            case 'tier': return customer.tier;
-            default: return '';
-        }
-    };
-
-    const handleExportCsv = () => {
-        if (processedCustomers.length === 0) {
-            alert("Không có dữ liệu để xuất.");
-            return;
-        }
-    
-        const columnsToExport = allPossibleColumns.filter(col => visibleColumns.has(col.key));
-    
-        const escapeCsvCell = (cell: string | number) => {
-            const strCell = String(cell);
-            if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
-                return `"${strCell.replace(/"/g, '""')}"`;
-            }
-            return strCell;
-        };
-    
-        const headers = columnsToExport.map(c => c.label).join(',');
-    
-        const rows = processedCustomers.map(customer => {
-            return columnsToExport.map(col => {
-                const cellData = getCellDataForExport(customer, col.key);
-                return escapeCsvCell(cellData);
-            }).join(',');
-        });
-    
-        const csvContent = [headers, ...rows].join('\n');
+        if (!chartRef.current) return;
         
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const deliveredStatusIds = MOCK_INITIAL_DATA.statuses.filter(s => s.type === 'delivered').map(s => s.id);
+        const salesData = customers
+            .filter(c => deliveredStatusIds.includes(c.statusId))
+            .reduce((acc, customer) => {
+                const date = new Date(customer.lastContactDate).toISOString().split('T')[0];
+                acc[date] = (acc[date] || 0) + 1;
+                return acc;
+            }, {} as Record<string, number>);
+        
+        const labels: string[] = [];
+        const data: number[] = [];
+        const today = new Date();
+        for (let i = 29; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(today.getDate() - i);
+            const dateString = date.toISOString().split('T')[0];
+            labels.push(date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }));
+            data.push(salesData[dateString] || 0);
+        }
+
+        const ctx = chartRef.current.getContext('2d');
+        if (!ctx) return;
+        
+        if (chartInstance.current) {
+            chartInstance.current.destroy();
+        }
+
+        chartInstance.current = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Số xe đã bán',
+                    data,
+                    fill: true,
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                    borderColor: 'rgba(79, 70, 229, 1)',
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                 scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                    x: { grid: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+        
+         return () => {
+            if (chartInstance.current) {
+                chartInstance.current.destroy();
+            }
+        };
+
+    }, [customers]);
+
+    return <canvas ref={chartRef} />;
+};
+
+
+const PipelineDistributionChart: React.FC<{customers: Customer[], statuses: Status[]}> = ({ customers, statuses }) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+    const chartInstance = useRef<Chart | null>(null);
+
+    useEffect(() => {
+        if (!chartRef.current) return;
+
+        const pipelineStatuses = statuses.filter(s => s.type === 'pipeline').sort((a,b) => a.order - b.order);
+        const data = pipelineStatuses.map(status => customers.filter(c => c.statusId === status.id).length);
+        const labels = pipelineStatuses.map(status => status.name);
+        const colors = pipelineStatuses.map(status => status.color);
+
+        const ctx = chartRef.current.getContext('2d');
+        if (!ctx) return;
+
+         if (chartInstance.current) {
+            chartInstance.current.destroy();
+        }
+
+        chartInstance.current = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Số lượng KH',
+                    data,
+                    backgroundColor: colors,
+                    hoverOffset: 4
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15 } } } }
+        });
+        
+        return () => {
+            if (chartInstance.current) {
+                chartInstance.current.destroy();
+            }
+        };
+
+    }, [customers, statuses]);
+
+    return <canvas ref={chartRef} />;
+};
+
+
+const UpcomingReminders: React.FC<{
+    reminders: Reminder[],
+    customers: Customer[],
+    onEdit: (reminder: Reminder) => void,
+    onToggleComplete: (id: string) => void,
+    onDelete: (id: string) => void,
+    onOpenCustomer: (customer: Customer) => void,
+}> = ({ reminders, customers, onEdit, onToggleComplete, onDelete, onOpenCustomer }) => {
+
+    const upcoming = useMemo(() => {
+        return reminders
+            .filter(r => !r.completed)
+            .sort((a, b) => a.dueDate - b.dueDate)
+            .slice(0, 5);
+    }, [reminders]);
+
+    const getCustomer = (id: string) => customers.find(c => c.id === id);
+    
+    const isOverdue = (dueDate: number) => new Date(dueDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
+
+    if (upcoming.length === 0) {
+        return <EmptyState icon={<CheckCircleIcon className="w-12 h-12 text-green-500" />} title="Thật tuyệt vời!" message="Bạn đã hoàn thành tất cả nhắc hẹn." />;
+    }
+
+    return (
+        <div className="space-y-3">
+            {upcoming.map(reminder => {
+                const customer = getCustomer(reminder.customerId);
+                return (
+                    <div key={reminder.id} className="p-3 border rounded-lg flex items-center justify-between hover:bg-gray-50 transition">
+                        <div className="flex items-center">
+                             <button aria-label="Đánh dấu hoàn thành" onClick={() => onToggleComplete(reminder.id)} className="mr-4 text-gray-300 hover:text-green-500">
+                                 <div className="w-5 h-5 rounded-full border-2 border-current flex items-center justify-center"></div>
+                             </button>
+                             <div>
+                                 <p className={`font-semibold ${isOverdue(reminder.dueDate) ? 'text-red-600' : 'text-gray-800'}`}>{reminder.title}</p>
+                                 <p className="text-sm text-gray-500">
+                                     {customer ? <button onClick={() => onOpenCustomer(customer)} className="hover:underline">{customer.name}</button> : '...'} -
+                                     <span className={`ml-1 font-medium ${isOverdue(reminder.dueDate) ? 'text-red-500' : 'text-gray-600'}`}>{formatDate(reminder.dueDate)}</span>
+                                 </p>
+                             </div>
+                        </div>
+                         <div className="flex items-center space-x-1">
+                             <span className={`px-2 py-1 text-xs rounded-full ${reminder.priority === 'high' ? 'bg-red-100 text-red-800' : reminder.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{reminder.priority}</span>
+                             <button aria-label="Chỉnh sửa nhắc hẹn" onClick={() => onEdit(reminder)} className="p-2 text-gray-400 hover:text-indigo-600 rounded-full"><Edit2Icon className="w-4 h-4" /></button>
+                             <button aria-label="Xóa nhắc hẹn" onClick={() => onDelete(reminder.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-full"><Trash2Icon className="w-4 h-4" /></button>
+                        </div>
+                    </div>
+                )
+            })}
+        </div>
+    );
+};
+
+const ReportsView: React.FC<{crmData: CrmData, users: User[]}> = ({crmData, users}) => {
+    
+    const exportToCSV = (data: any[], filename: string) => {
+        if (data.length === 0) return;
+        const headers = Object.keys(data[0]);
+        const csvRows = [
+            headers.join(','),
+            ...data.map(row => 
+                headers.map(header => 
+                    JSON.stringify(row[header], (key, value) => value === null ? '' : value)
+                ).join(',')
+            )
+        ];
+        
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
-        link.setAttribute('download', 'danh_sach_khach_hang.csv');
+        link.setAttribute('download', `${filename}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
     };
     
-    const renderCellContent = (customer: Customer, columnKey: string) => {
-        switch (columnKey) {
-            case 'name':
-                return (
-                    <>
-                        <div className="font-medium text-gray-900"><Highlight text={customer.name} highlight={searchTerm} /></div>
-                        <div className="text-sm text-gray-500"><Highlight text={customer.carModel} highlight={searchTerm} /></div>
-                    </>
-                );
-            case 'phone':
-                return (
-                    <>
-                        <div className="text-sm text-gray-900"><Highlight text={customer.phone} highlight={searchTerm} /></div>
-                        <div className="text-sm text-gray-500 truncate max-w-[150px]">{customer.email}</div>
-                    </>
-                );
-            case 'statusId':
-                const status = statuses.find(s => s.id === customer.statusId);
-                return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full text-white`} style={{backgroundColor: status?.color || '#ccc'}}>{status?.name || '---'}</span>;
-            case 'salesValue':
-                return <span className="text-sm text-green-600 font-semibold">{formatCurrency(customer.salesValue)}</span>;
-            case 'userId':
-                 return <span className="text-sm text-gray-500">{getUserName(customer.userId)}</span>;
-            case 'lastContactDate':
-                return <span className="text-sm text-gray-500">{formatDate(customer.lastContactDate)}</span>;
-            case 'createdDate':
-                return <span className="text-sm text-gray-500">{formatDate(customer.createdDate)}</span>;
-            case 'carModel':
-                return <span className="text-sm text-gray-500"><Highlight text={customer.carModel} highlight={searchTerm} /></span>;
-            case 'source':
-                return <span className="text-sm text-gray-500"><Highlight text={customer.source} highlight={searchTerm} /></span>;
-             case 'city':
-                return <span className="text-sm text-gray-500"><Highlight text={customer.city} highlight={searchTerm} /></span>;
-            case 'tier':
-                const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
-                return <span className={`text-sm font-semibold ${tierConfig?.color}`}>{tierConfig?.value}</span>;
-            default:
-                return null;
-        }
-    };
-    
-    const columnsToRender = allPossibleColumns.filter(col => visibleColumns.has(col.key));
-
     return (
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-             <div className="p-4 border-b flex justify-between items-center space-x-4">
-                <div className="flex-1">
-                    {currentUser.role === 'admin' && (
-                        <div className="max-w-xs">
-                             <label htmlFor="user-filter" className="block text-sm font-medium text-gray-700">
-                                Nhân viên
-                            </label>
-                            <select
-                                id="user-filter"
-                                value={selectedUserId}
-                                onChange={(e) => onSelectedUserChange(e.target.value)}
-                                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                            >
-                                <option value="all">Tất cả nhân viên</option>
-                                {users.filter(u => u.role === Role.USER).map(user => (
-                                    <option key={user.id} value={user.id}>{user.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-                </div>
-                <div className="flex items-center space-x-2">
-                    <button onClick={handleExportCsv} className="px-3 py-1.5 bg-green-100 text-green-700 border border-green-200 rounded-lg text-sm flex items-center hover:bg-green-200 transition">
-                        <DownloadIcon className="w-4 h-4 mr-2"/> Xuất Excel
-                    </button>
-                    <div className="relative" ref={columnSelectorRef}>
-                        <button onClick={() => setShowColumnSelector(prev => !prev)} className="px-3 py-1.5 border rounded-lg text-sm flex items-center text-gray-600 hover:bg-gray-100">
-                            <SettingsIcon className="w-4 h-4 mr-2"/> Tùy chỉnh cột
-                        </button>
-                        {showColumnSelector && (
-                            <div className="absolute top-full right-0 mt-2 w-56 bg-white border rounded-lg shadow-xl z-10 p-2">
-                                <p className="text-xs text-gray-500 px-2 pb-2 border-b">Chọn cột để hiển thị</p>
-                                <div className="mt-2 space-y-1">
-                                    {allPossibleColumns.map(col => (
-                                        <label key={col.key} className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                checked={visibleColumns.has(col.key)}
-                                                onChange={() => handleColumnToggle(col.key)}
-                                            />
-                                            <span className="text-sm text-gray-700">{col.label}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            {columnsToRender.map(col => (
-                                <th key={col.key} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort(col.key as keyof Customer | 'userId')}>
-                                    <div className="flex items-center">
-                                        {col.label}
-                                        {sortField === col.key && <span className="ml-1">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
-                                    </div>
-                                </th>
-                            ))}
-                            <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {processedCustomers.length > 0 && processedCustomers.map(customer => (
-                            <tr key={customer.id} className="hover:bg-gray-50">
-                                {columnsToRender.map(col => (
-                                    <td key={col.key} className="px-6 py-4 whitespace-nowrap">
-                                        {renderCellContent(customer, col.key)}
-                                    </td>
-                                ))}
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <div className="flex items-center justify-end space-x-3">
-                                        <button onClick={() => onGenerateScript(customer)} className="text-indigo-600 hover:text-indigo-900" title="Tạo kịch bản AI"><SparklesIcon className="w-5 h-5"/></button>
-                                        <button onClick={() => onCustomerEdit(customer)} className="text-gray-500 hover:text-gray-800" title="Sửa"><Edit2Icon className="w-5 h-5"/></button>
-                                        <button onClick={() => onCustomerDelete(customer.id)} className="text-red-600 hover:text-red-900" title="Xóa"><Trash2Icon className="w-5 h-5"/></button>
-                                    </div>
-                                </td>
-                            </tr>
-                            )
-                        )}
-                    </tbody>
-                </table>
-                {processedCustomers.length === 0 && (
-                     <div className="text-center p-8 text-gray-500">Không tìm thấy khách hàng nào.</div>
-                )}
+        <div className="space-y-6">
+             <h1 className="text-2xl font-bold text-gray-800">Báo cáo & Phân tích</h1>
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <EmployeeSalesReport crmData={crmData} users={users} onExport={exportToCSV} />
+                 <CarModelPerformanceReport crmData={crmData} onExport={exportToCSV} />
+                 <LeadSourceReport crmData={crmData} onExport={exportToCSV} />
+                 <CacLtvReport crmData={crmData} onExport={exportToCSV} />
             </div>
         </div>
     )
-}
-
-const SalesOverTimeChart: React.FC<{ data: { month: string, revenue: number }[] }> = ({ data }) => {
-    const chartRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        let chart: Chart | null = null;
-        if (chartRef.current && data.length > 0) {
-            const chartData = {
-                labels: data.map(d => d.month),
-                datasets: [{
-                    label: 'Doanh số',
-                    data: data.map(d => d.revenue),
-                    fill: true,
-                    borderColor: '#4f46e5',
-                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                    tension: 0.3,
-                    pointBackgroundColor: '#4f46e5',
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                }]
-            };
-            chart = new Chart(chartRef.current, {
-                type: 'line',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => `Doanh số: ${formatCurrency(context.parsed.y)}`
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: (value) => {
-                                    if (typeof value === 'number') {
-                                        if (value >= 1e9) return `${value / 1e9}B`;
-                                        if (value >= 1e6) return `${value / 1e6}M`;
-                                    }
-                                    return value;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        return () => {
-            chart?.destroy();
-        };
-    }, [data]);
-
-    return (
-         <div className="bg-white p-6 rounded-xl shadow-sm border">
-             <h3 className="text-lg font-semibold mb-4">Doanh số theo Thời gian</h3>
-             <div className="chart-container h-[300px]">
-                {data.length > 0 ? (
-                    <canvas ref={chartRef}></canvas>
-                ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu doanh số.</div>
-                )}
-             </div>
-        </div>
-    );
 };
 
+const ReportCard: React.FC<{title: string, onExport: () => void, children: React.ReactNode}> = ({ title, onExport, children }) => (
+    <div className="bg-white rounded-xl shadow p-6">
+        <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-lg text-gray-800">{title}</h3>
+             <button onClick={onExport} className="px-3 py-1.5 text-xs border rounded-lg flex items-center hover:bg-gray-100">
+                <DownloadIcon className="w-3 h-3 mr-1.5" /> Xuất CSV
+            </button>
+        </div>
+        {children}
+    </div>
+);
 
-const Dashboard: React.FC<{customers: Customer[], statuses: Status[], reminders: Reminder[], onEditReminder: (rem: Reminder) => void, onToggleComplete: (id: string) => void, onDeleteReminder: (id: string) => void, onOpenCustomer: (customer: Customer) => void }> = ({customers, statuses, reminders, ...reminderHandlers}) => {
-    const metrics = useMemo(() => {
-        const deliveredCustomers = customers.filter(c => statuses.find(s => s.id === c.statusId)?.type === 'delivered');
-        const totalRevenue = deliveredCustomers.reduce((sum, c) => sum + c.salesValue, 0);
-        const potentialCustomers = customers.filter(c => !['delivered', 'lostsale'].includes(statuses.find(s => s.id === c.statusId)?.type || ''));
-        const totalDeals = customers.filter(c => !['lostsale'].includes(statuses.find(s => s.id === c.statusId)?.type || '')).length;
-        const conversionRate = totalDeals > 0 ? (deliveredCustomers.length / totalDeals) * 100 : 0;
+const EmployeeSalesReport: React.FC<{crmData: CrmData, users: User[], onExport: (data: any[], filename: string) => void}> = ({crmData, users, onExport}) => {
+    const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
+    const salesUsers = users.filter(u => u.role === Role.USER);
+    
+    const reportData = useMemo(() => salesUsers.map(user => {
+        const userCustomers = crmData.customers.filter(c => c.userId === user.id);
+        const carsSold = userCustomers.filter(c => deliveredStatusIds.includes(c.statusId));
+        const totalRevenue = carsSold.reduce((sum, c) => sum + c.salesValue, 0);
+        const totalLeads = userCustomers.length;
+        const conversionRate = totalLeads > 0 ? (carsSold.length / totalLeads * 100) : 0;
         
         return {
-            totalCustomers: customers.length,
-            totalRevenue,
-            conversionRate: Math.round(conversionRate),
-            deliveredCount: deliveredCustomers.length,
-            potentialCount: potentialCustomers.length,
-            tierDistribution: CUSTOMER_TIERS.map(tier => ({ label: tier.label, count: customers.filter(c => c.tier === tier.value).length, color: tier.color })),
-            statusDistribution: statuses.map(status => ({ name: status.name, count: customers.filter(c => c.statusId === status.id).length, color: status.color})),
+            'Nhân viên': user.name,
+            'Doanh thu': totalRevenue,
+            'Số xe bán': carsSold.length,
+            'Tổng Leads': totalLeads,
+            'Tỷ lệ chốt (%)': conversionRate.toFixed(1)
         }
-    }, [customers, statuses]);
-
-    const salesOverTime = useMemo(() => {
-        const deliveredStatusId = statuses.find(s => s.type === 'delivered')?.id;
-        if (!deliveredStatusId) return [];
-
-        const salesByMonth: { [key: string]: number } = customers
-            .filter(c => c.statusId === deliveredStatusId)
-            .reduce((acc, curr) => {
-                const date = new Date(curr.lastContactDate);
-                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                acc[monthKey] = (acc[monthKey] || 0) + curr.salesValue;
-                return acc;
-            }, {} as { [key: string]: number });
-
-        return Object.entries(salesByMonth)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([monthKey, revenue]) => {
-                const [year, month] = monthKey.split('-');
-                return {
-                    month: `T${month}/${year}`,
-                    revenue,
-                };
-            });
-    }, [customers, statuses]);
-
-    const tierChartRef = useRef<HTMLCanvasElement>(null);
-    const statusChartRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        const charts: Chart[] = [];
-        if (tierChartRef.current) {
-            const chart = new Chart(tierChartRef.current, {
-                type: 'doughnut',
-                data: {
-                    labels: metrics.tierDistribution.map(t => t.label.split(' - ')[0]),
-                    datasets: [{ data: metrics.tierDistribution.map(t => t.count), backgroundColor: ['#DC2626', '#D97706', '#4F46E5', '#6B7280'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-            });
-            charts.push(chart);
-        }
-        if (statusChartRef.current) {
-             const chart = new Chart(statusChartRef.current, {
-                type: 'bar',
-                data: {
-                    labels: metrics.statusDistribution.map(s => s.name.substring(3)),
-                    datasets: [{ label: 'Số lượng KH', data: metrics.statusDistribution.map(s => s.count), backgroundColor: '#4f46e5', borderRadius: 4 }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-            });
-            charts.push(chart);
-        }
-        return () => charts.forEach(c => c.destroy());
-    }, [metrics]);
-
-    const MetricCard: React.FC<{title:string, value: string | number, subtitle: string, icon: React.ReactNode, color: string}> = ({title, value, subtitle, icon, color}) => (
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
-            <div className="flex items-center space-x-4">
-                <div className={`p-3 rounded-lg bg-${color}-100 text-${color}-600`}>{icon}</div>
-                <div>
-                    <p className="text-sm text-gray-500">{title}</p>
-                    <p className="text-2xl font-bold text-gray-800">{value}</p>
-                    <p className="text-sm text-gray-500">{subtitle}</p>
-                </div>
-            </div>
-        </div>
-    );
+    }), [crmData.customers, salesUsers, deliveredStatusIds]);
+    
+    const chartData = {
+        labels: reportData.map(d => d['Nhân viên']),
+        datasets: [{
+            label: 'Doanh thu',
+            data: reportData.map(d => d['Doanh thu']),
+            backgroundColor: 'rgba(79, 70, 229, 0.8)',
+            borderColor: 'rgba(79, 70, 229, 1)',
+            borderWidth: 1
+        }]
+    };
     
     return (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 <MetricCard title="Doanh số" value={formatCurrency(metrics.totalRevenue)} subtitle={`${metrics.deliveredCount} xe đã giao`} icon={<DollarSignIcon />} color="green" />
-                 <MetricCard title="Tỷ lệ Chốt" value={`${metrics.conversionRate}%`} subtitle={`${metrics.deliveredCount}/${metrics.deliveredCount+metrics.potentialCount} deals`} icon={<TargetIcon />} color="blue" />
-                 <MetricCard title="Tổng Khách hàng" value={metrics.totalCustomers} subtitle="trong hệ thống" icon={<UsersIcon />} color="indigo" />
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                 <div className="lg:col-span-3 bg-white rounded-xl p-6 shadow-sm border">
-                    <UpcomingRemindersWidget reminders={reminders} customers={customers} {...reminderHandlers} />
+        <ReportCard title="Hiệu suất bán hàng theo nhân viên" onExport={() => onExport(reportData, 'employee_sales_report')}>
+            <div className="space-y-4">
+                <div className="chart-container h-64">
+                    <BarChart data={chartData} options={{ indexAxis: 'y', plugins: { legend: { display: false } } }} />
                 </div>
-                 <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border">
-                     <h3 className="text-lg font-semibold mb-4">Khách hàng theo Phân loại</h3>
-                     <div className="chart-container"><canvas ref={tierChartRef}></canvas></div>
+                <div className="overflow-x-auto max-h-60 custom-scrollbar">
+                    <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
+                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 1 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
+                    </table>
                 </div>
             </div>
-             <div className="bg-white rounded-xl p-6 shadow-sm border">
-                 <h3 className="text-lg font-semibold mb-4">Khách hàng theo Trạng thái</h3>
-                 <div className="chart-container"><canvas ref={statusChartRef}></canvas></div>
-            </div>
-            <SalesOverTimeChart data={salesOverTime} />
-        </div>
-    )
-}
-
-const CarModelSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
-    const chartRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        let chart: Chart | null = null;
-        if (chartRef.current && data.length > 0) {
-            const chartData = {
-                labels: data.map(d => d['Dòng xe']),
-                datasets: [
-                    {
-                        label: 'Doanh số',
-                        data: data.map(d => d.rawRevenue),
-                        backgroundColor: 'rgba(79, 70, 229, 0.8)',
-                        borderColor: '#4338ca',
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        yAxisID: 'yRevenue',
-                        order: 2,
-                    },
-                    {
-                        label: 'Số xe đã giao',
-                        data: data.map(d => d['Số xe đã giao']),
-                        backgroundColor: 'rgba(22, 163, 74, 0.8)',
-                        borderColor: '#15803d',
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        yAxisID: 'yCount',
-                        order: 1,
-                    }
-                ]
-            };
-            chart = new Chart(chartRef.current, {
-                type: 'bar',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: true, position: 'top' },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        if (context.dataset.label === 'Doanh số') {
-                                            label += formatCurrency(context.parsed.y);
-                                        } else {
-                                            label += context.parsed.y;
-                                        }
-                                    }
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: false,
-                        },
-                        yRevenue: {
-                            type: 'linear',
-                            position: 'left',
-                            beginAtZero: true,
-                            grid: {
-                                drawOnChartArea: true,
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    if (typeof value === 'number') {
-                                        if (value >= 1e9) return (value / 1e9) + 'B';
-                                        if (value >= 1e6) return (value / 1e6) + 'M';
-                                    }
-                                    return value;
-                                },
-                                color: '#4f46e5',
-                            },
-                            title: {
-                                display: true,
-                                text: 'Doanh số (VNĐ)',
-                                color: '#4f46e5',
-                            }
-                        },
-                        yCount: {
-                            type: 'linear',
-                            position: 'right',
-                            beginAtZero: true,
-                            grid: {
-                                drawOnChartArea: false,
-                            },
-                            ticks: {
-                                stepSize: 1,
-                                color: '#16a34a',
-                            },
-                            title: {
-                                display: true,
-                                text: 'Số xe đã giao',
-                                color: '#16a34a',
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        return () => {
-            chart?.destroy();
-        };
-    }, [data]);
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Hiệu suất theo Dòng xe</h3>
-                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
-                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
-                </button>
-            </div>
-            
-            {data.length > 0 ? (
-                <div className="flex-grow">
-                    <div className="mb-6 chart-container h-[350px]">
-                        <canvas ref={chartRef}></canvas>
-                    </div>
-                </div>
-            ) : (
-                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
-            )}
-        </div>
+        </ReportCard>
     );
 };
 
-const EmployeeSalesReport: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
-    const chartRef = useRef<HTMLCanvasElement>(null);
 
-    useEffect(() => {
-        let chart: Chart | null = null;
-        if (chartRef.current && data.length > 0) {
-            chart = new Chart(chartRef.current, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d['Nhân viên']),
-                    datasets: [{
-                        label: 'Doanh số',
-                        data: data.map(d => d.rawRevenue),
-                        backgroundColor: '#4f46e5',
-                        borderRadius: 4,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => `Doanh số: ${formatCurrency(ctx.raw as number)}` } }
-                    },
-                    scales: { y: { beginAtZero: true, ticks: { callback: (v) => typeof v === 'number' ? (v >= 1e9 ? `${v / 1e9}B` : `${v / 1e6}M`) : v } } }
-                }
-            });
-        }
-        return () => { chart?.destroy() };
-    }, [data]);
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Hiệu suất theo Nhân viên</h3>
-                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
-                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
-                </button>
-            </div>
-            {data.length > 0 ? (
-                <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>{Object.keys(data[0]).filter(k => k !== 'rawRevenue').map(key => <th key={key} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).filter(k => k !== 'rawRevenue').map(key => <td key={key} className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="chart-container h-[250px] lg:h-auto">
-                        <canvas ref={chartRef}></canvas>
-                    </div>
-                </div>
-            ) : (
-                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
-            )}
-        </div>
-    );
-}
-
-const LeadSourceReport: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
-    const pieChartRef = useRef<HTMLCanvasElement>(null);
-    const barChartRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        const charts: Chart[] = [];
-        if (pieChartRef.current && data.length > 0) {
-            charts.push(new Chart(pieChartRef.current, {
-                type: 'pie',
-                data: {
-                    labels: data.map(d => d['Nguồn']),
-                    datasets: [{ data: data.map(d => d['Số lượng KH']), backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#8B5CF6'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-            }));
-        }
-        if (barChartRef.current && data.length > 0) {
-            charts.push(new Chart(barChartRef.current, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d['Nguồn']),
-                    datasets: [{ label: 'Doanh số', data: data.map(d => d.rawRevenue), backgroundColor: '#10B981', borderRadius: 4, }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `Doanh số: ${formatCurrency(ctx.raw as number)}` } } },
-                    scales: { x: { beginAtZero: true, ticks: { callback: (v) => typeof v === 'number' ? (v >= 1e9 ? `${v / 1e9}B` : `${v / 1e6}M`) : v } } }
-                }
-            }));
-        }
-        return () => { charts.forEach(c => c.destroy()); };
-    }, [data]);
+const CarModelPerformanceReport: React.FC<{crmData: CrmData, onExport: (data: any[], filename: string) => void}> = ({crmData, onExport}) => {
+    const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
     
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Hiệu quả Nguồn Khách hàng</h3>
-                 <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
-                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
-                </button>
-            </div>
-             {data.length > 0 ? (
-                <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-                    <div className="chart-container h-[250px]"><canvas ref={pieChartRef}></canvas></div>
-                    <div className="chart-container h-[250px]"><canvas ref={barChartRef}></canvas></div>
-                </div>
-            ) : (
-                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
-            )}
-        </div>
-    );
-};
+    const reportData = useMemo(() => {
+        const dataByModel: Record<string, { leads: number, sold: number, revenue: number }> = {};
+        crmData.carModels.forEach(model => {
+            dataByModel[model.name] = { leads: 0, sold: 0, revenue: 0 };
+        });
 
-const CAC_LTV_Report: React.FC<{ data: any[], onExport: () => void }> = ({ data, onExport }) => {
-    const chartRef = useRef<HTMLCanvasElement>(null);
-    useEffect(() => {
-        let chart: Chart | null = null;
-        if (chartRef.current && data.length > 0) {
-            chart = new Chart(chartRef.current, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d['Nguồn']),
-                    datasets: [{
-                        label: 'Tỷ lệ LTV:CAC',
-                        data: data.map(d => d.rawRatio),
-                        backgroundColor: '#f59e0b',
-                        borderRadius: 4,
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                    plugins: { 
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => `Tỷ lệ: ${(ctx.raw as number).toFixed(1)}:1` } }
-                    },
-                    scales: { x: { beginAtZero: true, title: { display: true, text: 'Tỷ lệ LTV:CAC' } } }
+        crmData.customers.forEach(customer => {
+            if (customer.carModel && dataByModel[customer.carModel]) {
+                dataByModel[customer.carModel].leads++;
+                if (deliveredStatusIds.includes(customer.statusId)) {
+                    dataByModel[customer.carModel].sold++;
+                    dataByModel[customer.carModel].revenue += customer.salesValue;
                 }
-            });
-        }
-        return () => { chart?.destroy() };
-    }, [data]);
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border h-full flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Chi phí Thu hút (CAC) vs LTV</h3>
-                <button onClick={onExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center">
-                    <DownloadIcon className="w-4 h-4 mr-2"/> Xuất CSV
-                </button>
-            </div>
-            {data.length > 0 ? (
-                <div className="flex-grow grid grid-cols-1 xl:grid-cols-2 gap-6">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>{Object.keys(data[0]).filter(k => !k.startsWith('raw')).map(key => <th key={key} className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">{key}</th>)}</tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {data.map((row, index) => <tr key={index} className="hover:bg-gray-50">{Object.keys(row).filter(k => !k.startsWith('raw')).map(key => <td key={key} className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">{row[key]}</td>)}</tr>)}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="chart-container h-[250px] xl:h-auto">
-                        <canvas ref={chartRef}></canvas>
-                    </div>
-                </div>
-            ) : (
-                <div className="flex items-center justify-center h-full text-gray-500">Không có dữ liệu.</div>
-            )}
-        </div>
-    );
-};
-
-
-const ReportsView: React.FC<{ crmData: CrmData, users: User[] }> = ({ crmData, users }) => {
-    const { customers, statuses, carModels, customerSources, marketingSpends } = crmData;
-    const deliveredStatusId = useMemo(() => statuses.find(s => s.type === 'delivered')?.id, [statuses]);
-
-    const carModelData = useMemo(() => {
-        if (!deliveredStatusId) return [];
-        const deliveredCustomers = customers.filter(c => c.statusId === deliveredStatusId);
-        const groupedByModel = deliveredCustomers.reduce((acc, customer) => {
-            const modelName = customer.carModel || "Chưa xác định";
-            if (!acc[modelName]) acc[modelName] = { count: 0, revenue: 0 };
-            acc[modelName].count++;
-            acc[modelName].revenue += customer.salesValue;
-            return acc;
-        }, {} as Record<string, { count: number, revenue: number }>);
-
-        return Object.entries(groupedByModel).map(([model, data]) => ({ "Dòng xe": model, "Số xe đã giao": data.count, "Doanh số": formatCurrency(data.revenue), rawRevenue: data.revenue }))
-            .sort((a, b) => b.rawRevenue - a.rawRevenue);
-    }, [customers, deliveredStatusId, carModels]);
-
-    const employeeSalesData = useMemo(() => {
-        if (!deliveredStatusId) return [];
-        const salesUsers = users.filter(u => u.role === Role.USER);
-        const deliveredCustomers = customers.filter(c => c.statusId === deliveredStatusId);
-
-        return salesUsers.map(user => {
-            const userSales = deliveredCustomers.filter(c => c.userId === user.id);
-            const totalCustomers = customers.filter(c => c.userId === user.id).length;
-            const totalRevenue = userSales.reduce((sum, c) => sum + c.salesValue, 0);
-            const conversionRate = totalCustomers > 0 ? (userSales.length / totalCustomers) * 100 : 0;
-            return {
-                "Nhân viên": user.name,
-                "Doanh số": formatCurrency(totalRevenue),
-                "Số xe đã giao": userSales.length,
-                "Tổng KH": totalCustomers,
-                "Tỷ lệ chốt": `${conversionRate.toFixed(1)}%`,
-                rawRevenue: totalRevenue
-            };
-        }).sort((a,b) => b.rawRevenue - a.rawRevenue);
-    }, [customers, users, deliveredStatusId]);
-
-    const leadSourceData = useMemo(() => {
-        if (!deliveredStatusId) return [];
-        const deliveredCustomers = customers.filter(c => c.statusId === deliveredStatusId);
-         const groupedBySource = customerSources.map(source => {
-             const sourceCustomers = customers.filter(c => c.source === source.name);
-             const sourceRevenue = deliveredCustomers.filter(c => c.source === source.name).reduce((sum, c) => sum + c.salesValue, 0);
-             return {
-                "Nguồn": source.name,
-                "Số lượng KH": sourceCustomers.length,
-                "Doanh số": formatCurrency(sourceRevenue),
-                rawRevenue: sourceRevenue,
-             }
-         }).sort((a,b) => b.rawRevenue - a.rawRevenue);
-        return groupedBySource;
-    }, [customers, customerSources, deliveredStatusId]);
-
-    const cacLtvData = useMemo(() => {
-        if (!deliveredStatusId) return [];
-        return customerSources.map(source => {
-            const sourceCustomers = customers.filter(c => c.source === source.name);
-            const deliveredSourceCustomers = sourceCustomers.filter(c => c.statusId === deliveredStatusId);
-            
-            const totalRevenue = deliveredSourceCustomers.reduce((sum, c) => sum + c.salesValue, 0);
-            const marketingSpend = marketingSpends.find(s => s.name === source.name)?.amount || 0;
-
-            const ltv = deliveredSourceCustomers.length > 0 ? totalRevenue / deliveredSourceCustomers.length : 0;
-            const cac = sourceCustomers.length > 0 ? marketingSpend / sourceCustomers.length : 0;
-            const ratio = cac > 0 ? ltv / cac : 0;
-
-            return {
-                "Nguồn": source.name,
-                "Tổng KH": sourceCustomers.length,
-                "LTV": formatCurrency(ltv),
-                "Chi phí (CAC)": formatCurrency(cac),
-                "Tỷ lệ LTV:CAC": ratio > 0 ? `${ratio.toFixed(1)}:1` : "N/A",
-                rawLtv: ltv,
-                rawCac: cac,
-                rawRatio: ratio,
             }
-        }).sort((a,b) => b.rawRatio - a.rawRatio);
-    }, [customers, customerSources, marketingSpends, deliveredStatusId]);
+        });
+        
+        return Object.entries(dataByModel).map(([modelName, data]) => ({
+            'Dòng xe': modelName,
+            'Số xe bán': data.sold,
+            'Doanh thu': data.revenue,
+            'Tổng Leads': data.leads,
+        })).sort((a,b) => b['Số xe bán'] - a['Số xe bán']);
 
-    const handleExport = (data: any[], filename: string) => {
-         if (data.length === 0) { alert("Không có dữ liệu để xuất."); return; }
-        const headers = Object.keys(data[0]).filter(k => !k.startsWith('raw')).join(',');
-        const rows = data.map(row => Object.keys(row).filter(k => !k.startsWith('raw')).map(key => {
-            const cell = String(row[key]).includes(',') ? `"${row[key]}"` : row[key];
-            return cell;
-        }).join(','));
-        const csvContent = [headers, ...rows].join('\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `${filename}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
+    }, [crmData.customers, crmData.carModels, deliveredStatusIds]);
+    
+     const chartData = {
+        labels: reportData.map(d => d['Dòng xe']),
+        datasets: [{
+            label: 'Số xe bán',
+            data: reportData.map(d => d['Số xe bán']),
+            backgroundColor: ['#4f46e5', '#f97316', '#22c55e', '#ef4444', '#3b82f6'],
+        }]
+    };
+    
+    return (
+        <ReportCard title="Hiệu suất theo Dòng xe" onExport={() => onExport(reportData, 'carmodel_performance_report')}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                 <div className="chart-container h-64">
+                    <PieChart data={chartData} />
+                </div>
+                 <div className="overflow-x-auto max-h-60 custom-scrollbar">
+                     <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
+                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 2 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
+                    </table>
+                </div>
+            </div>
+        </ReportCard>
+    )
+};
+
+const LeadSourceReport: React.FC<{crmData: CrmData, onExport: (data: any[], filename: string) => void}> = ({crmData, onExport}) => {
+    const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
+
+    const reportData = useMemo(() => {
+        const dataBySource: Record<string, { leads: number, revenue: number }> = {};
+        crmData.customerSources.forEach(source => {
+            dataBySource[source.name] = { leads: 0, revenue: 0 };
+        });
+
+        crmData.customers.forEach(customer => {
+            if (customer.source && dataBySource[customer.source]) {
+                dataBySource[customer.source].leads++;
+                if (deliveredStatusIds.includes(customer.statusId)) {
+                    dataBySource[customer.source].revenue += customer.salesValue;
+                }
+            }
+        });
+        
+        return Object.entries(dataBySource).map(([sourceName, data]) => ({
+            'Nguồn KH': sourceName,
+            'Số lượng Leads': data.leads,
+            'Doanh thu': data.revenue,
+        })).sort((a,b) => b['Số lượng Leads'] - a['Số lượng Leads']);
+    }, [crmData.customers, crmData.customerSources, deliveredStatusIds]);
+    
+    const chartData = {
+        labels: reportData.map(d => d['Nguồn KH']),
+        datasets: [{
+            label: 'Doanh thu',
+            data: reportData.map(d => d['Doanh thu']),
+            backgroundColor: 'rgba(249, 115, 22, 0.8)',
+        }]
+    };
+    
+    return (
+        <ReportCard title="Hiệu quả Nguồn khách hàng" onExport={() => onExport(reportData, 'lead_source_report')}>
+            <div className="space-y-4">
+                 <div className="chart-container h-64">
+                    <BarChart data={chartData} options={{ plugins: { legend: { display: false } } }} />
+                </div>
+                 <div className="overflow-x-auto max-h-60 custom-scrollbar">
+                     <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
+                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{typeof val === 'number' && j === 2 ? formatCurrency(val) : val}</td>)}</tr>)}</tbody>
+                    </table>
+                </div>
+            </div>
+        </ReportCard>
+    );
+};
+
+const CacLtvReport: React.FC<{ crmData: CrmData; onExport: (data: any[], filename: string) => void }> = ({ crmData, onExport }) => {
+    const deliveredStatusIds = crmData.statuses.filter(s => s.type === 'delivered').map(s => s.id);
+
+    const reportData = useMemo(() => {
+        const spendMap = new Map(crmData.marketingSpends.map(s => [s.name, s.amount]));
+
+        const dataBySource: Record<string, { customers: number; revenue: number }> = {};
+        crmData.customerSources.forEach(source => {
+            dataBySource[source.name] = { customers: 0, revenue: 0 };
+        });
+
+        crmData.customers.forEach(customer => {
+            if (customer.source && dataBySource[customer.source]) {
+                if (deliveredStatusIds.includes(customer.statusId)) {
+                    dataBySource[customer.source].customers++;
+                    dataBySource[customer.source].revenue += customer.salesValue;
+                }
+            }
+        });
+
+        return Object.entries(dataBySource).map(([sourceName, data]) => {
+            const spend = spendMap.get(sourceName) || 0;
+            const ltv = data.customers > 0 ? data.revenue / data.customers : 0;
+            const cac = data.customers > 0 ? spend / data.customers : 0;
+            const ratio = cac > 0 ? (ltv / cac) : 0;
+
+            return {
+                'Nguồn KH': sourceName,
+                'Tổng KH': data.customers,
+                'LTV (VNĐ)': ltv,
+                'CAC (VNĐ)': cac,
+                'Tỷ lệ LTV:CAC': ratio,
+            };
+        }).sort((a,b) => b['Tỷ lệ LTV:CAC'] - a['Tỷ lệ LTV:CAC']);
+    }, [crmData, deliveredStatusIds]);
+    
+    const formattedDataForExport = reportData.map(row => ({...row, 'Tỷ lệ LTV:CAC': row['Tỷ lệ LTV:CAC'].toFixed(2) }));
+
+    const chartData = {
+        labels: reportData.map(d => d['Nguồn KH']),
+        datasets: [{
+            label: 'Tỷ lệ LTV:CAC',
+            data: reportData.map(d => d['Tỷ lệ LTV:CAC']),
+            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+        }]
     };
 
     return (
-        <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Báo cáo Kinh doanh</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="lg:col-span-2">
-                    <EmployeeSalesReport data={employeeSalesData} onExport={() => handleExport(employeeSalesData, 'bao_cao_nhan_vien')} />
+        <ReportCard title="Chi phí Thu hút KH (CAC) vs. Giá trị Vòng đời (LTV)" onExport={() => onExport(formattedDataForExport, 'cac_ltv_report')}>
+            <div className="space-y-4">
+                <div className="chart-container h-64">
+                    <BarChart data={chartData} options={{ plugins: { legend: { display: false } } }} />
                 </div>
-                <div className="lg:col-span-2">
-                     <CAC_LTV_Report data={cacLtvData} onExport={() => handleExport(cacLtvData, 'bao_cao_cac_ltv')} />
+                <div className="overflow-x-auto max-h-60 custom-scrollbar">
+                    <table className="w-full text-sm">
+                         <thead className="bg-gray-50 sticky top-0"><tr>{Object.keys(reportData[0] || {}).map(h => <th key={h} className="p-2 text-left font-semibold text-gray-600">{h}</th>)}</tr></thead>
+                        <tbody>{reportData.map((row, i) => <tr key={i} className="border-b">{Object.values(row).map((val, j) => <td key={j} className="p-2">{j > 1 && typeof val === 'number' ? (j === 4 ? val.toFixed(2) : formatCurrency(val)) : val}</td>)}</tr>)}</tbody>
+                    </table>
                 </div>
-                <div>
-                    <LeadSourceReport data={leadSourceData} onExport={() => handleExport(leadSourceData, 'bao_cao_nguon_khach_hang')} />
-                </div>
-                <div>
-                    <CarModelSalesReport data={carModelData} onExport={() => handleExport(carModelData, 'bao_cao_doanh_so_dong_xe')} />
+            </div>
+        </ReportCard>
+    );
+};
+
+
+const BarChart: React.FC<{data: any, options?: any}> = ({data, options}) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+    const chartInstance = useRef<Chart | null>(null);
+
+    useEffect(() => {
+        if (!chartRef.current) return;
+        const ctx = chartRef.current.getContext('2d');
+        if (!ctx) return;
+
+        if (chartInstance.current) chartInstance.current.destroy();
+
+        chartInstance.current = new Chart(ctx, { type: 'bar', data, options: { responsive: true, maintainAspectRatio: false, ...options } });
+        
+        return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+    }, [data, options]);
+    return <canvas ref={chartRef} />;
+};
+
+const PieChart: React.FC<{data: any, options?: any}> = ({data, options}) => {
+    const chartRef = useRef<HTMLCanvasElement>(null);
+    const chartInstance = useRef<Chart | null>(null);
+
+    useEffect(() => {
+        if (!chartRef.current) return;
+        const ctx = chartRef.current.getContext('2d');
+        if (!ctx) return;
+
+        if (chartInstance.current) chartInstance.current.destroy();
+
+        chartInstance.current = new Chart(ctx, { type: 'pie', data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } }, ...options } });
+        
+        return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+    }, [data, options]);
+    return <canvas ref={chartRef} />;
+};
+
+
+const SettingsPanel: React.FC<{
+    users: User[];
+    crmData: CrmData;
+    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+    setCrmData: React.Dispatch<React.SetStateAction<CrmData>>;
+    addNotification: (message: string, type: 'success' | 'error') => void;
+}> = ({ users, crmData, setUsers, setCrmData, addNotification }) => {
+    
+    const handleResetAllData = () => {
+        if (window.confirm("HÀNH ĐỘNG NGUY HIỂM!\nBạn có chắc chắn muốn xóa TẤT CẢ dữ liệu khách hàng, nhắc hẹn, và mục tiêu không? Dữ liệu cài đặt sẽ được giữ lại.")) {
+            const { crmData: resetData } = dataService.deleteAllCrmData();
+            setCrmData(resetData);
+            addNotification('Đã xóa tất cả dữ liệu CRM!', 'success');
+        }
+    };
+    
+    const handleSeedData = () => {
+         if (window.confirm("Bạn có muốn nạp lại dữ liệu mẫu không? Thao tác này sẽ XÓA TẤT CẢ dữ liệu hiện tại và thay thế bằng dữ liệu mẫu.")) {
+            const { users: newUsers, crmData: newCrmData } = dataService.seedData();
+            setUsers(newUsers);
+            setCrmData(newCrmData);
+            addNotification('Nạp lại dữ liệu mẫu thành công!', 'success');
+        }
+    };
+    
+    const handleSettingsUpdate = <T extends Status | CarModel | CustomerSource | MarketingSpend>(key: keyof CrmData, updatedData: T[]) => {
+        // @ts-ignore
+        setCrmData(prev => ({...prev, [key]: updatedData }));
+    }
+
+    return (
+         <div className="space-y-8">
+            <h1 className="text-2xl font-bold text-gray-800">Cài đặt Hệ thống</h1>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <EditableSettingList
+                    title="Trạng thái Pipeline"
+                    items={crmData.statuses.sort((a,b) => a.order - b.order)}
+                    displayFields={['name', 'color', 'type']}
+                    itemFactory={() => ({ id: `status_${Date.now()}`, name: '', color: '#cccccc', order: crmData.statuses.length + 1, type: 'pipeline' })}
+                    onUpdate={(updatedItems) => handleSettingsUpdate('statuses', updatedItems.map((item, index) => ({...item, order: index + 1 })))}
+                    addNotification={addNotification}
+                    enableDragDrop
+                />
+                
+                 <EditableSettingList
+                    title="Dòng xe"
+                    items={crmData.carModels}
+                    displayFields={['name']}
+                    itemFactory={() => ({ id: `model_${Date.now()}`, name: '' })}
+                    onUpdate={(updatedItems) => handleSettingsUpdate('carModels', updatedItems)}
+                    addNotification={addNotification}
+                />
+                
+                 <EditableSettingList
+                    title="Nguồn khách hàng"
+                    items={crmData.customerSources}
+                    displayFields={['name']}
+                    itemFactory={() => ({ id: `source_${Date.now()}`, name: '' })}
+                    onUpdate={(updatedItems) => handleSettingsUpdate('customerSources', updatedItems)}
+                    addNotification={addNotification}
+                />
+
+                <EditableSettingList
+                    title="Chi phí Marketing"
+                    items={crmData.marketingSpends}
+                    displayFields={['name', 'amount']}
+                    itemFactory={() => ({ id: `spend_${Date.now()}`, name: '', amount: 0 })}
+                    onUpdate={(updatedItems) => handleSettingsUpdate('marketingSpends', updatedItems)}
+                    addNotification={addNotification}
+                    helpText="Chi phí theo từng nguồn KH, dùng cho báo cáo CAC."
+                />
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6 border-l-4 border-red-500">
+                <h3 className="font-bold text-lg text-red-700 mb-2">Vùng nguy hiểm</h3>
+                <p className="text-sm text-gray-600 mb-4">Các hành động này không thể hoàn tác. Hãy cẩn thận.</p>
+                <div className="flex space-x-4">
+                    <button onClick={handleResetAllData} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">Xóa tất cả Dữ liệu</button>
+                    <button onClick={handleSeedData} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">Nạp lại Dữ liệu Mẫu</button>
                 </div>
             </div>
         </div>
     );
 };
 
+interface EditableSettingListProps<T extends { id: string, name: string }> {
+    title: string;
+    items: T[];
+    displayFields: (keyof T)[];
+    itemFactory: () => T;
+    onUpdate: (updatedItems: T[]) => void;
+    addNotification: (message: string, type: 'success' | 'error') => void;
+    enableDragDrop?: boolean;
+    helpText?: string;
+}
 
-const ReminderFormModal: React.FC<{ isOpen: boolean, onClose: () => void, onSave: (data: Omit<Reminder, 'id'>, id?: string) => void, reminder: Reminder | null, customerId: string | null, customers: Customer[], user: User }> = ({isOpen, onClose, onSave, reminder, customerId, customers, user}) => {
-    const [formData, setFormData] = useState({ title: '', description: '', dueDate: '', priority: 'medium' as Reminder['priority'], customerId: ''});
+function EditableSettingList<T extends { id: string, name: string, order?: number, color?: string, type?: string, amount?: number }>({ title, items, displayFields, itemFactory, onUpdate, addNotification, enableDragDrop = false, helpText }: EditableSettingListProps<T>) {
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [data, setData] = useState<Partial<T>>({});
+    const [isAdding, setIsAdding] = useState(false);
+    const [newData, setNewData] = useState<Partial<T>>({});
 
+    const handleEdit = (item: T) => {
+        setEditingId(item.id);
+        setData(item);
+        setIsAdding(false);
+    };
+
+    const handleSave = () => {
+        if (!editingId) return;
+        const updatedItems = items.map(item => item.id === editingId ? { ...item, ...data } : item);
+        onUpdate(updatedItems);
+        addNotification('Đã lưu thay đổi.', 'success');
+        setEditingId(null);
+    };
+
+    const handleAdd = () => {
+        if (!newData.name?.trim()) { 
+            addNotification('Tên không được để trống', 'error');
+            return; 
+        }
+        const newItem = { ...itemFactory(), ...newData };
+        onUpdate([...items, newItem]);
+        addNotification('Đã thêm mục mới.', 'success');
+        setIsAdding(false);
+        setNewData({} as Partial<T>);
+    };
+
+    const handleDelete = (id: string) => {
+        if (window.confirm("Hành động này sẽ không xóa khách hàng liên quan, nhưng bạn sẽ cần cập nhật họ sau. Bạn chắc chứ?")) {
+            onUpdate(items.filter(item => item.id !== id));
+            addNotification('Đã xóa mục.', 'success');
+        }
+    };
+    
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        e.dataTransfer.setData("draggedIndex", index.toString());
+    };
+    
+    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+        const draggedIndex = parseInt(e.dataTransfer.getData("draggedIndex"), 10);
+        const newItems = [...items];
+        const [draggedItem] = newItems.splice(draggedIndex, 1);
+        newItems.splice(dropIndex, 0, draggedItem);
+        onUpdate(newItems);
+    };
+
+    const renderEditForm = (item: Partial<T>, isNew: boolean, stateSetter: (d: Partial<T>) => void) => (
+        <div className="grid grid-cols-2 gap-2 p-2 bg-gray-100 rounded-md">
+            {displayFields.map(field => (
+                 <div key={field as string}>
+                     <label className="text-xs capitalize">{field as string}</label>
+                     <input 
+                        type={field === 'color' ? 'color' : field === 'amount' ? 'number' : 'text'}
+                        value={item[field] as string || ''}
+                        onChange={e => stateSetter({ ...item, [field]: e.target.value })}
+                        className="w-full p-1 border rounded"
+                    />
+                 </div>
+            ))}
+            { 'type' in itemFactory() &&
+                 <div>
+                     <label className="text-xs">Type</label>
+                      <select value={item['type']} onChange={e => stateSetter({...item, type: e.target.value})} className="w-full p-1 border rounded">
+                          <option value="pipeline">Pipeline</option><option value="win">Win</option><option value="delivered">Delivered</option><option value="lostsale">Lost Sale</option>
+                      </select>
+                 </div>
+            }
+             <div className="col-span-2 flex justify-end space-x-2">
+                 <button onClick={() => isNew ? setIsAdding(false) : setEditingId(null)} className="px-2 py-1 text-xs border rounded">Hủy</button>
+                 <button onClick={isNew ? handleAdd : handleSave} className="px-2 py-1 text-xs bg-green-500 text-white rounded">Lưu</button>
+            </div>
+        </div>
+    );
+    
+
+    return (
+        <div className="bg-white rounded-xl shadow p-6">
+            <h3 className="font-bold text-lg mb-2">{title}</h3>
+            {helpText && <p className="text-sm text-gray-500 mb-4">{helpText}</p>}
+            <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                {items.map((item, index) => (
+                     <div key={item.id} className="p-2 border rounded-lg" onDrop={e => handleDrop(e, index)} onDragOver={e => e.preventDefault()}>
+                         {editingId === item.id ? renderEditForm(data, false, setData) : (
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    {enableDragDrop && <span className="cursor-move text-gray-400 mr-2" draggable onDragStart={e => handleDragStart(e, index)}><GripVerticalIcon /></span>}
+                                    { 'color' in item && <span className="w-4 h-4 rounded-full mr-3" style={{backgroundColor: item.color as string}}></span> }
+                                    <span className="font-medium">{item.name}</span>
+                                    { 'amount' in item && <span className="text-gray-500 ml-2"> - {formatCurrency(item.amount as number)}</span>}
+                                </div>
+                                <div className="space-x-2">
+                                     <button aria-label="Chỉnh sửa" onClick={() => handleEdit(item)} className="p-1 text-gray-500 hover:text-indigo-600"><Edit2Icon className="w-4 h-4"/></button>
+                                     <button aria-label="Xóa" onClick={() => handleDelete(item.id)} className="p-1 text-gray-500 hover:text-red-600"><Trash2Icon className="w-4 h-4"/></button>
+                                </div>
+                            </div>
+                         )}
+                    </div>
+                ))}
+            </div>
+             <div className="mt-4">
+                {isAdding ? renderEditForm(newData, true, setNewData) : (
+                    <button onClick={() => { setIsAdding(true); setEditingId(null); setNewData(itemFactory()) }} className="w-full p-2 text-sm border-2 border-dashed rounded-lg text-gray-500 hover:bg-gray-100 hover:border-gray-400">
+                        + Thêm mới
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+const RemindersView: React.FC<{
+    reminders: Reminder[],
+    customers: Customer[],
+    onOpenReminderModal: (customerId: string | null, reminder?: Reminder) => void,
+    onToggleComplete: (id: string) => void,
+    onDelete: (id: string) => void,
+}> = ({ reminders, customers, onOpenReminderModal, onToggleComplete, onDelete }) => {
+    
+    const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
+    
+    const filteredReminders = useMemo(() => {
+        let sorted = [...reminders].sort((a,b) => a.dueDate - b.dueDate);
+        if (filter === 'pending') return sorted.filter(r => !r.completed);
+        if (filter === 'completed') return sorted.filter(r => r.completed);
+        return sorted;
+    }, [reminders, filter]);
+    
+    const getCustomer = (id: string) => customers.find(c => c.id === id);
+
+    return (
+        <div className="bg-white rounded-xl shadow p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <h2 className="text-xl font-bold text-gray-800">Quản lý Nhắc hẹn</h2>
+                <div className="flex items-center space-x-2">
+                     <div className="bg-gray-100 p-1 rounded-lg">
+                        <button onClick={() => setFilter('pending')} className={`px-3 py-1 text-sm rounded-md ${filter === 'pending' ? 'bg-white shadow' : 'text-gray-600'}`}>Chưa xong</button>
+                        <button onClick={() => setFilter('completed')} className={`px-3 py-1 text-sm rounded-md ${filter === 'completed' ? 'bg-white shadow' : 'text-gray-600'}`}>Đã xong</button>
+                        <button onClick={() => setFilter('all')} className={`px-3 py-1 text-sm rounded-md ${filter === 'all' ? 'bg-white shadow' : 'text-gray-600'}`}>Tất cả</button>
+                    </div>
+                    <button onClick={() => onOpenReminderModal(null)} className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition flex items-center">
+                        <PlusIcon className="w-4 h-4 mr-2" /> Thêm
+                    </button>
+                </div>
+            </div>
+            
+            <div className="space-y-3">
+                 {filteredReminders.length > 0 ? filteredReminders.map(reminder => {
+                    const customer = getCustomer(reminder.customerId);
+                    const isOverdue = !reminder.completed && reminder.dueDate < Date.now();
+                     return (
+                         <div key={reminder.id} className={`p-4 border rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between transition ${reminder.completed ? 'bg-gray-50 opacity-70' : 'bg-white'}`}>
+                            <div className="flex items-start">
+                                <button aria-label="Đánh dấu hoàn thành" onClick={() => onToggleComplete(reminder.id)} className={`mr-4 mt-1 flex-shrink-0 ${reminder.completed ? 'text-green-500' : 'text-gray-300 hover:text-green-500'}`}>
+                                    {reminder.completed ? <CheckCircleIcon className="w-6 h-6"/> : <div className="w-6 h-6 rounded-full border-2 border-current"></div>}
+                                 </button>
+                                 <div>
+                                     <p className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-800'} ${reminder.completed ? 'line-through' : ''}`}>{reminder.title}</p>
+                                     <p className="text-sm text-gray-500 mt-1">{reminder.description}</p>
+                                      <p className="text-sm text-gray-500 mt-2">
+                                          KH: <strong className="text-indigo-600">{customer?.name || '...'}</strong> | 
+                                          Hạn: <span className={`font-medium ${isOverdue ? 'text-red-500' : 'text-gray-600'}`}>{formatDateTime(reminder.dueDate)}</span>
+                                     </p>
+                                 </div>
+                             </div>
+                             <div className="flex items-center space-x-1 flex-shrink-0 ml-auto sm:ml-4 mt-3 sm:mt-0">
+                                <span className={`px-2 py-1 text-xs rounded-full ${reminder.priority === 'high' ? 'bg-red-100 text-red-800' : reminder.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{reminder.priority}</span>
+                                <button aria-label="Chỉnh sửa" onClick={() => onOpenReminderModal(null, reminder)} className="p-2 text-gray-400 hover:text-indigo-600 rounded-full"><Edit2Icon className="w-4 h-4" /></button>
+                                <button aria-label="Xóa" onClick={() => onDelete(reminder.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-full"><Trash2Icon className="w-4 h-4" /></button>
+                            </div>
+                        </div>
+                    );
+                }) : <EmptyState icon={<BellIcon className="w-12 h-12" />} title="Không có nhắc hẹn nào" message="Mọi thứ đều được kiểm soát. Hãy thêm nhắc hẹn mới để không bỏ lỡ cơ hội." action={<button onClick={() => onOpenReminderModal(null)} className="mt-4 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition flex items-center mx-auto"><PlusIcon className="w-4 h-4 mr-2" /> Thêm nhắc hẹn</button>} /> }
+            </div>
+        </div>
+    );
+};
+
+interface ReminderFormModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (reminderData: Omit<Reminder, 'id'>, existingId?: string) => void;
+    reminder: Reminder | null;
+    customerId: string | null;
+    customers: Customer[];
+    user: User;
+}
+
+const ReminderFormModal: React.FC<ReminderFormModalProps> = ({isOpen, onClose, onSave, reminder, customerId, customers, user}) => {
+    const [formData, setFormData] = useState({ title: '', description: '', dueDate: '', priority: 'medium' as Reminder['priority'], customerId: '', completed: false });
+    
     useEffect(() => {
-        if (isOpen) {
+        if(isOpen) {
             if (reminder) {
-                setFormData({
-                    title: reminder.title,
-                    description: reminder.description,
-                    dueDate: reminder.dueDate ? new Date(reminder.dueDate).toISOString().substring(0, 16) : '',
-                    priority: reminder.priority,
-                    customerId: reminder.customerId,
-                });
+                 const localDate = new Date(reminder.dueDate).toISOString().slice(0, 16);
+                 setFormData({ ...reminder, dueDate: localDate });
             } else {
-                 const today = new Date();
-                 today.setHours(9, 0, 0, 0);
-                 setFormData({
-                    title: '',
-                    description: '',
-                    dueDate: today.toISOString().substring(0, 16),
-                    priority: 'medium',
-                    customerId: customerId || '',
-                });
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const localDate = tomorrow.toISOString().slice(0, 16);
+                setFormData({ title: '', description: '', dueDate: localDate, priority: 'medium', customerId: customerId || '', completed: false });
             }
         }
     }, [isOpen, reminder, customerId]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if(!formData.title || !formData.dueDate || !formData.customerId) {
-            alert("Vui lòng điền đủ thông tin: Tiêu đề, Ngày hẹn và Khách hàng.");
-            return;
-        }
-        const submissionData = {
-            ...formData,
+        if (!formData.title || !formData.customerId) { alert("Vui lòng nhập Tiêu đề và chọn Khách hàng."); return; }
+        
+        const reminderToSave: Omit<Reminder, 'id'> = {
+            title: formData.title,
+            description: formData.description,
             dueDate: new Date(formData.dueDate).getTime(),
+            priority: formData.priority,
+            customerId: formData.customerId,
             userId: user.id,
-            completed: reminder?.completed || false,
+            completed: formData.completed,
         };
-        onSave(submissionData, reminder?.id);
+        
+        onSave(reminderToSave, reminder?.id);
         onClose();
     };
 
     return (
-        <Modal isOpen={isOpen} title={reminder ? "Sửa Nhắc hẹn" : "Thêm Nhắc hẹn"} onClose={onClose}>
+        <Modal isOpen={isOpen} title={reminder ? 'Sửa nhắc hẹn' : 'Thêm nhắc hẹn mới'} onClose={onClose}>
             <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium">Tiêu đề *</label>
+                    <input type="text" value={formData.title} onChange={e => setFormData(p => ({...p, title: e.target.value}))} className="w-full p-2 border rounded-lg" required/>
+                </div>
                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Khách hàng</label>
-                     <select value={formData.customerId} onChange={e => setFormData(p => ({...p, customerId: e.target.value}))} className="w-full p-2 border rounded-lg" disabled={!!customerId && !reminder}>
+                    <label className="block text-sm font-medium">Khách hàng *</label>
+                    <select value={formData.customerId} onChange={e => setFormData(p => ({...p, customerId: e.target.value}))} className="w-full p-2 border rounded-lg bg-gray-50" required>
                         <option value="">-- Chọn khách hàng --</option>
                         {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>)}
                     </select>
                 </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Tiêu đề</label>
-                    <input type="text" value={formData.title} onChange={e => setFormData(p => ({...p, title: e.target.value}))} className="w-full p-2 border rounded-lg" />
+                <div>
+                    <label className="block text-sm font-medium">Thời gian *</label>
+                    <input type="datetime-local" value={formData.dueDate} onChange={e => setFormData(p => ({...p, dueDate: e.target.value}))} className="w-full p-2 border rounded-lg" required/>
                 </div>
                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Ngày giờ hẹn</label>
-                    <input type="datetime-local" value={formData.dueDate} onChange={e => setFormData(p => ({...p, dueDate: e.target.value}))} className="w-full p-2 border rounded-lg" />
+                    <label className="block text-sm font-medium">Mô tả</label>
+                    <textarea value={formData.description} onChange={e => setFormData(p => ({...p, description: e.target.value}))} className="w-full p-2 border rounded-lg" rows={3}/>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Độ ưu tiên</label>
-                    <select value={formData.priority} onChange={e => setFormData(p => ({...p, priority: e.target.value as Reminder['priority']}))} className="w-full p-2 border rounded-lg">
+                    <label className="block text-sm font-medium">Ưu tiên</label>
+                     <select value={formData.priority} onChange={e => setFormData(p => ({...p, priority: e.target.value as Reminder['priority']}))} className="w-full p-2 border rounded-lg">
                         <option value="high">Cao</option>
                         <option value="medium">Trung bình</option>
                         <option value="low">Thấp</option>
                     </select>
                 </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Mô tả</label>
-                    <textarea value={formData.description} onChange={e => setFormData(p => ({...p, description: e.target.value}))} rows={3} className="w-full p-2 border rounded-lg"></textarea>
-                </div>
-                <div className="flex justify-end space-x-3 pt-4 border-t">
+                 <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
                     <button type="button" onClick={onClose} className="px-4 py-2 border rounded-lg">Hủy</button>
-                    <button type="submit" className="px-6 py-2 bg-indigo-600 text-white rounded-lg">{reminder ? "Cập nhật" : "Lưu"}</button>
+                    <button type="submit" className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Lưu</button>
                 </div>
             </form>
         </Modal>
     );
 };
-
-
-const UpcomingRemindersWidget: React.FC<{reminders: Reminder[], customers: Customer[], onEditReminder: (rem: Reminder) => void, onToggleComplete: (id: string) => void, onDeleteReminder: (id: string) => void, onOpenCustomer: (customer: Customer) => void }> = ({reminders, customers, onEditReminder, onToggleComplete, onDeleteReminder, onOpenCustomer}) => {
-    const upcomingReminders = useMemo(() => {
-        return reminders
-            .filter(r => !r.completed)
-            .sort((a,b) => a.dueDate - b.dueDate)
-            .slice(0, 5);
-    }, [reminders]);
-    
-    const priorityConfig = {
-        high: { label: 'Cao', color: 'bg-red-500'},
-        medium: { label: 'TB', color: 'bg-yellow-500'},
-        low: { label: 'Thấp', color: 'bg-green-500'},
-    }
-
-    const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || '...';
-    
-    return (
-        <div>
-            <h3 className="text-lg font-semibold mb-4">Nhắc hẹn sắp tới</h3>
-            {upcomingReminders.length > 0 ? (
-                <ul className="space-y-3">
-                    {upcomingReminders.map(rem => (
-                         <li key={rem.id} className="p-3 border rounded-lg flex items-start space-x-3 hover:bg-gray-50">
-                             <input type="checkbox" checked={rem.completed} onChange={() => onToggleComplete(rem.id)} className="mt-1 h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"/>
-                            <div className="flex-1">
-                                <p className="font-medium text-gray-800">{rem.title}</p>
-                                <p className="text-sm text-gray-600">Với KH: <button onClick={() => {
-                                    const customer = customers.find(c => c.id === rem.customerId);
-                                    if(customer) onOpenCustomer(customer);
-                                }} className="text-indigo-600 hover:underline">{getCustomerName(rem.customerId)}</button></p>
-                                <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
-                                    <span className="flex items-center"><ClockIcon className="w-3 h-3 mr-1"/>{formatDateTime(rem.dueDate)}</span>
-                                    <span className="flex items-center"><span className={`w-2 h-2 rounded-full ${priorityConfig[rem.priority].color} mr-1`}></span>{priorityConfig[rem.priority].label}</span>
-                                </div>
-                            </div>
-                             <div className="flex items-center space-x-1">
-                                 <button onClick={() => onEditReminder(rem)} className="p-1 text-gray-400 hover:text-indigo-600"><Edit2Icon className="w-4 h-4"/></button>
-                                 <button onClick={() => onDeleteReminder(rem.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2Icon className="w-4 h-4"/></button>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-            ) : (
-                <div className="text-center py-8 text-gray-500">
-                    <CheckCircleIcon className="w-10 h-10 mx-auto text-green-500 mb-2"/>
-                    <p>Không có nhắc hẹn nào sắp tới.</p>
-                </div>
-            )}
-        </div>
-    )
-};
-
-
-const RemindersView: React.FC<{reminders: Reminder[], customers: Customer[], onOpenReminderModal: (customerId: string | null, reminder?: Reminder) => void, onToggleComplete: (id: string) => void, onDelete: (id: string) => void}> = ({reminders, customers, onOpenReminderModal, onToggleComplete, onDelete}) => {
-    const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('pending');
-    
-    const filteredReminders = useMemo(() => {
-        let sorted = [...reminders].sort((a,b) => a.dueDate - b.dueDate);
-        if (filter === 'completed') return sorted.filter(r => r.completed);
-        if (filter === 'pending') return sorted.filter(r => !r.completed);
-        return sorted;
-    }, [reminders, filter]);
-
-    const getCustomerInfo = (id: string) => customers.find(c => c.id === id);
-
-    return (
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold">Quản lý Nhắc hẹn</h2>
-                <button onClick={() => onOpenReminderModal(null)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center">
-                    <PlusIcon className="w-4 h-4 mr-2"/> Thêm Nhắc hẹn
-                </button>
-            </div>
-            <div className="flex items-center space-x-2 border-b mb-4 pb-2">
-                 <button onClick={() => setFilter('pending')} className={`px-3 py-1 rounded-full text-sm ${filter === 'pending' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Chưa hoàn thành</button>
-                 <button onClick={() => setFilter('completed')} className={`px-3 py-1 rounded-full text-sm ${filter === 'completed' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Đã hoàn thành</button>
-                 <button onClick={() => setFilter('all')} className={`px-3 py-1 rounded-full text-sm ${filter === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Tất cả</button>
-            </div>
-            <div className="space-y-3">
-                {filteredReminders.map(rem => (
-                    <div key={rem.id} className={`p-4 border rounded-lg flex items-start space-x-4 ${rem.completed ? 'bg-gray-50 opacity-70' : 'bg-white'}`}>
-                        <input type="checkbox" checked={rem.completed} onChange={() => onToggleComplete(rem.id)} className="mt-1 h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"/>
-                        <div className="flex-1">
-                            <p className={`font-medium ${rem.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>{rem.title}</p>
-                            <p className="text-sm text-gray-600">{rem.description}</p>
-                             <div className="mt-2 text-sm text-gray-500">
-                                <p><strong>KH:</strong> {getCustomerInfo(rem.customerId)?.name || 'N/A'} - {getCustomerInfo(rem.customerId)?.phone}</p>
-                                <p><strong>Hẹn lúc:</strong> {formatDateTime(rem.dueDate)}</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                             <button onClick={() => onOpenReminderModal(null, rem)} className="p-2 text-gray-500 hover:text-indigo-600"><Edit2Icon className="w-5 h-5"/></button>
-                             <button onClick={() => onDelete(rem.id)} className="p-2 text-gray-500 hover:text-red-600"><Trash2Icon className="w-5 h-5"/></button>
-                        </div>
-                    </div>
-                ))}
-                 {filteredReminders.length === 0 && <div className="text-center p-8 text-gray-500">Không có nhắc hẹn nào.</div>}
-            </div>
-        </div>
-    );
-};
-
-const EditableSettingList = <T extends { id: string, name: string }>({ title, items, onUpdate, icon, itemType, allowDrag = false }: { title: string, items: T[], onUpdate: (newItems: T[]) => void, icon: React.ReactNode, itemType: string, allowDrag?: boolean }) => {
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editData, setEditData] = useState<Partial<T> | null>(null);
-    const [isAdding, setIsAdding] = useState(false);
-    const [newData, setNewData] = useState<Partial<T>>({ name: '' });
-    const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: '' });
-
-    const handleEdit = (item: T) => {
-        setEditingId(item.id);
-        setEditData(item);
-    };
-
-    const handleCancel = () => {
-        setEditingId(null);
-        setEditData(null);
-    };
-
-    const handleSave = (id: string) => {
-        if (!editData || !editData.name?.trim()) {
-            alert("Tên không được để trống.");
-            return;
-        }
-        const updatedItems = items.map(item => item.id === id ? { ...item, ...editData } : item);
-        onUpdate(updatedItems);
-        handleCancel();
-    };
-
-    const handleAdd = () => {
-        if (!newData.name?.trim()) {
-            alert("Tên không được để trống.");
-            return;
-        }
-        const newItem = { ...newData, id: `${itemType}_${Date.now()}` } as T;
-        onUpdate([...items, newItem]);
-        setIsAdding(false);
-        // FIX: Add type assertion to reset state with generic type to avoid type inference error.
-        setNewData({} as Partial<T>);
-    };
-
-    const handleDelete = () => {
-        const {id} = deleteConfirm;
-        onUpdate(items.filter(item => item.id !== id));
-        setDeleteConfirm({ isOpen: false, id: '' });
-    };
-
-    // Drag and Drop handlers
-    const dragItem = useRef<number | null>(null);
-    const dragOverItem = useRef<number | null>(null);
-
-    const handleDragSort = () => {
-        if (dragItem.current === null || dragOverItem.current === null) return;
-        const newItems = [...items];
-        const [draggedItem] = newItems.splice(dragItem.current, 1);
-        newItems.splice(dragOverItem.current, 0, draggedItem);
-        dragItem.current = null;
-        dragOverItem.current = null;
-        onUpdate(newItems);
-    };
-
-    const renderItemContent = (item: T) => {
-        if (itemType === 'statuses') {
-            const status = item as unknown as Status;
-            return (
-                 <div className="flex items-center">
-                    {allowDrag && <GripVerticalIcon className="w-5 h-5 text-gray-400 cursor-grab mr-2"/>}
-                    <div className="w-5 h-5 rounded-full border" style={{ backgroundColor: status.color }}></div>
-                    <span className="ml-3">{status.name}</span>
-                    <span className="ml-auto text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{status.type}</span>
-                </div>
-            );
-        }
-        if (itemType === 'marketingSpends') {
-            const spend = item as unknown as MarketingSpend;
-            return (
-                <div className="flex items-center w-full">
-                    <span>{spend.name}</span>
-                    <span className="ml-auto font-semibold text-green-600">{formatCurrency(spend.amount)}</span>
-                </div>
-            );
-        }
-        return <span className="flex-1">{item.name}</span>;
-    }
-    
-    // FIX: Use functional updates for state setters to ensure correct type inference with generics.
-    // The original `setData(d => ...)` was incorrect because `setData`'s signature only accepted a value, not a function.
-    // The most pragmatic fix is to use a non-functional update, which is safe in this context and avoids complex type gymnastics.
-    const renderEditForm = (data: Partial<T>, setData: (data: Partial<T> | null) => void) => (
-        <div className="flex-1 flex items-center gap-2">
-            <input type="text" value={data.name || ''} onChange={e => setData({ ...data, name: e.target.value })} className="w-full p-1 border rounded-md" placeholder="Tên"/>
-            {itemType === 'statuses' && (
-                <>
-                    {/* FIX: Cast object to Partial<T> to resolve generic type error on 'color' property. */}
-                    <input type="color" value={(data as Partial<Status>).color || '#ffffff'} onChange={e => setData({ ...data, color: e.target.value } as Partial<T>)} className="h-8 w-10 p-0 border-none rounded-md cursor-pointer"/>
-                    {/* FIX: Cast object to Partial<T> to resolve generic type error on 'type' property. */}
-                    <select value={(data as Partial<Status>).type || 'pipeline'} onChange={e => setData({ ...data, type: e.target.value as Status['type'] } as Partial<T>)} className="p-1 border rounded-md">
-                        <option value="pipeline">Pipeline</option>
-                        <option value="win">Win</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="lostsale">Lostsale</option>
-                    </select>
-                </>
-            )}
-            {itemType === 'marketingSpends' && (
-                 // FIX: Cast object to Partial<T> to resolve generic type error on 'amount' property.
-                 <input type="number" value={(data as Partial<MarketingSpend>).amount || ''} onChange={e => setData({ ...data, amount: Number(e.target.value) } as Partial<T>)} className="w-full p-1 border rounded-md" placeholder="Chi phí (VNĐ)"/>
-            )}
-        </div>
-    );
-    
-
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-sm border">
-             <ConfirmationModal 
-                isOpen={deleteConfirm.isOpen} 
-                title="Xác nhận xóa" 
-                message={`Xóa mục này sẽ không xóa khách hàng liên quan, nhưng bạn sẽ cần cập nhật họ sau. Bạn chắc chứ?`}
-                onConfirm={handleDelete} 
-                onCancel={() => setDeleteConfirm({ isOpen: false, id: '' })} />
-            <h3 className="text-lg font-semibold flex items-center mb-4">{icon} {title}</h3>
-            <div className="space-y-2">
-                {items.map((item, index) => (
-                    <div key={item.id} 
-                         className="flex items-center p-2 rounded-lg hover:bg-gray-50"
-                         draggable={allowDrag}
-                         onDragStart={() => (dragItem.current = index)}
-                         onDragEnter={() => (dragOverItem.current = index)}
-                         onDragEnd={handleDragSort}
-                         onDragOver={(e) => e.preventDefault()}
-                    >
-                        {editingId === item.id && editData ? (
-                            <>
-                                {renderEditForm(editData, setEditData)}
-                                <div className="flex items-center space-x-2 ml-4">
-                                    <button onClick={() => handleSave(item.id)} className="p-1 text-green-600 hover:bg-green-100 rounded-full"><CheckCircleIcon className="w-5 h-5"/></button>
-                                    <button onClick={handleCancel} className="p-1 text-gray-500 hover:bg-gray-100 rounded-full"><XIcon className="w-5 h-5"/></button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                {renderItemContent(item)}
-                                <div className="flex items-center space-x-2 ml-auto">
-                                    <button onClick={() => handleEdit(item)} className="p-1 text-gray-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full"><Edit2Icon className="w-4 h-4"/></button>
-                                    <button onClick={() => setDeleteConfirm({isOpen: true, id: item.id})} className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-full"><Trash2Icon className="w-4 h-4"/></button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                ))}
-            </div>
-            {isAdding ? (
-                <div className="flex items-center p-2 mt-4 border-t pt-4">
-                    {renderEditForm(newData, setNewData as (data: Partial<T> | null) => void)}
-                     <div className="flex items-center space-x-2 ml-4">
-                        <button onClick={handleAdd} className="p-1 text-green-600 hover:bg-green-100 rounded-full"><CheckCircleIcon className="w-5 h-5"/></button>
-                        <button onClick={() => setIsAdding(false)} className="p-1 text-gray-500 hover:bg-gray-100 rounded-full"><XIcon className="w-5 h-5"/></button>
-                    </div>
-                </div>
-            ) : (
-                <button onClick={() => setIsAdding(true)} className="mt-4 w-full flex items-center justify-center px-4 py-2 border-2 border-dashed rounded-lg text-gray-500 hover:bg-gray-100 hover:border-indigo-500 hover:text-indigo-600 transition">
-                    <PlusIcon className="w-4 h-4 mr-2"/> Thêm mới
-                </button>
-            )}
-        </div>
-    );
-};
-
-
-const SettingsPanel: React.FC<{ users: User[], crmData: CrmData, setUsers: React.Dispatch<React.SetStateAction<User[]>>, setCrmData: React.Dispatch<React.SetStateAction<CrmData>> }> = ({ users, crmData, setUsers, setCrmData }) => {
-    
-    const seedInitialData = () => {
-        if (!window.confirm("Hành động này sẽ TẠO LẠI TOÀN BỘ dữ liệu mẫu, xóa hết dữ liệu hiện tại. Bạn có chắc chắn?")) return;
-        
-        const { users: newUsers, crmData: newCrmData } = dataService.seedData();
-        setUsers(newUsers);
-        setCrmData(newCrmData);
-        alert("Dữ liệu mẫu đã được khởi tạo thành công! Vui lòng tải lại trang nếu cần.");
-    };
-
-    const deleteAllData = () => {
-        if (!window.confirm("CẢNH BÁO: Hành động này sẽ XÓA TOÀN BỘ DỮ LIỆU KHÁCH HÀNG, NHẮC HẸN và CÀI ĐẶT trong hệ thống. Dữ liệu tài khoản người dùng sẽ không bị ảnh hưởng. Hành động này không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục không?")) return;
-
-        const { users: currentUsers, crmData: clearedCrmData } = dataService.deleteAllCrmData();
-        setUsers(currentUsers); // Users are preserved
-        setCrmData(clearedCrmData);
-        alert("Đã xóa toàn bộ dữ liệu CRM thành công!");
-    };
-
-    return (
-        <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Cài đặt Hệ thống</h2>
-            <div className="bg-white p-6 rounded-xl shadow-sm border">
-                <h3 className="text-lg font-semibold mb-2">Quản lý Dữ liệu</h3>
-                <p className="text-sm text-gray-500 mb-4">Sử dụng các nút này để thiết lập ban đầu hoặc dọn dẹp hệ thống.</p>
-                <div className="flex space-x-4">
-                     <button onClick={seedInitialData} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Khởi tạo Dữ liệu Mẫu</button>
-                     <button onClick={deleteAllData} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Xóa Toàn bộ Dữ liệu CRM</button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                 <EditableSettingList 
-                    title="Trạng thái Pipeline"
-                    items={[...crmData.statuses].sort((a,b) => a.order - b.order)}
-                    onUpdate={(newStatuses) => setCrmData(prev => ({...prev, statuses: newStatuses.map((s, i) => ({...s, order: i+1})) }))}
-                    icon={<LayersIcon className="w-5 h-5 mr-2"/>}
-                    itemType="statuses"
-                    allowDrag={true}
-                 />
-                 <div className="space-y-6">
-                     <EditableSettingList 
-                        title="Dòng xe"
-                        items={crmData.carModels}
-                        onUpdate={(newModels) => setCrmData(prev => ({...prev, carModels: newModels}))}
-                        icon={<CarIcon className="w-5 h-5 mr-2"/>}
-                        itemType="model"
-                     />
-                     <EditableSettingList 
-                        title="Nguồn Khách hàng"
-                        items={crmData.customerSources}
-                        onUpdate={(newSources) => setCrmData(prev => ({...prev, customerSources: newSources}))}
-                        icon={<SearchIcon className="w-5 h-5 mr-2"/>}
-                        itemType="source"
-                     />
-                      <EditableSettingList
-                        title="Chi phí Marketing"
-                        items={crmData.marketingSpends}
-                        onUpdate={(newSpends) => setCrmData(prev => ({...prev, marketingSpends: newSpends}))}
-                        icon={<DollarSignIcon className="w-5 h-5 mr-2"/>}
-                        itemType="marketingSpends"
-                     />
-                </div>
-            </div>
-        </div>
-    );
-};
-
 
 export default App;
