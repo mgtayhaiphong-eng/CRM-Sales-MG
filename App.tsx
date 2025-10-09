@@ -41,10 +41,6 @@ Chart.register(
 import { 
     MainLayoutSkeleton, 
     ViewSkeleton, 
-    CustomerForm, 
-    ConfirmationModal, 
-    ScriptModal, 
-    ReminderFormModal, 
     BulkActionBar,
     NotificationProvider,
     AuthProvider,
@@ -72,6 +68,12 @@ const KanbanView = React.lazy(() => import('./views/KanbanView'));
 const ListView = React.lazy(() => import('./views/ListView'));
 const ReportsView = React.lazy(() => import('./views/ReportsView'));
 const SettingsView = React.lazy(() => import('./views/SettingsView'));
+
+// Lazy load modals to further improve code splitting
+const CustomerForm = React.lazy(() => import('./components/UIComponents').then(module => ({ default: module.CustomerForm })));
+const ConfirmationModal = React.lazy(() => import('./components/UIComponents').then(module => ({ default: module.ConfirmationModal })));
+const ScriptModal = React.lazy(() => import('./components/UIComponents').then(module => ({ default: module.ScriptModal })));
+const ReminderFormModal = React.lazy(() => import('./components/UIComponents').then(module => ({ default: module.ReminderFormModal })));
 
 
 const App: React.FC = () => (
@@ -265,17 +267,17 @@ const MainLayout: React.FC = () => {
                 </main>
                 
                 {/* Global Modals rendered here, inside the main div but outside <main> */}
-                <>
-                    <CustomerForm isOpen={showCustomerForm} onClose={closeCustomerForm} onSave={crm.handleSaveCustomer} customer={editingCustomer} statuses={crm.crmData.statuses} carModels={crm.crmData.carModels} customerSources={crm.crmData.customerSources} />
-                    <ConfirmationModal 
+                <Suspense fallback={null}>
+                    {showCustomerForm && <CustomerForm isOpen={showCustomerForm} onClose={closeCustomerForm} onSave={crm.handleSaveCustomer} customer={editingCustomer} statuses={crm.crmData.statuses} carModels={crm.crmData.carModels} customerSources={crm.crmData.customerSources} />}
+                    {deleteConfirm.isOpen && <ConfirmationModal 
                         isOpen={deleteConfirm.isOpen} 
                         title="Xác nhận xóa" 
                         message={`Bạn có chắc chắn muốn xóa ${deleteConfirm.ids.length} khách hàng này không? Mọi nhắc hẹn liên quan cũng sẽ bị xóa.`}
                         onConfirm={() => { crm.handleDelete(deleteConfirm.ids); setDeleteConfirm({ isOpen: false, ids: [] }); }} 
-                        onCancel={() => setDeleteConfirm({ isOpen: false, ids: [] })} />
-                    <ScriptModal isOpen={scriptModal.isOpen} isLoading={scriptModal.isLoading} script={scriptModal.script} onClose={() => setScriptModal({isOpen: false, script: '', isLoading: false})} addNotification={addNotification} />
-                    <ReminderFormModal isOpen={showReminderForm} onClose={closeReminderModal} onSave={crm.handleSaveReminder} reminder={editingReminder} customerId={activeReminderCustomerId} customers={crm.crmData.customers} user={currentUser!} />
-                </>
+                        onCancel={() => setDeleteConfirm({ isOpen: false, ids: [] })} />}
+                    {scriptModal.isOpen && <ScriptModal isOpen={scriptModal.isOpen} isLoading={scriptModal.isLoading} script={scriptModal.script} onClose={() => setScriptModal({isOpen: false, script: '', isLoading: false})} addNotification={addNotification} />}
+                    {showReminderForm && <ReminderFormModal isOpen={showReminderForm} onClose={closeReminderModal} onSave={crm.handleSaveReminder} reminder={editingReminder} customerId={activeReminderCustomerId} customers={crm.crmData.customers} user={currentUser!} />}
+                </Suspense>
             </div>
         </div>
     );

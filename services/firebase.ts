@@ -1,133 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
+import firebase from 'firebase/compat/app'; // FIX: Import firebase v8 compatibility
+import 'firebase/compat/firestore'; // Needed for FieldValue
+import { db, auth } from '../firebaseConfig'; // Import from new config file
+
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData, type MarketingSpend } from '../types';
 import { CUSTOMER_TIERS } from '../constants';
-
-// START: MOCK DATA & LOCAL STORAGE SERVICE
-const MOCK_USERS_SEED: Omit<User, 'id'| 'password'>[] = [
-    { username: 'admin', role: Role.ADMIN, name: 'Admin Manager' },
-    { username: 'user', role: Role.USER, name: 'Nguyễn Văn A' },
-    { username: 'user2', role: Role.USER, name: 'Phạm Thị C' },
-];
-
-const MOCK_INITIAL_DATA: CrmData = {
-    statuses: [
-        { id: 'status1', name: '1. Khách hàng Mới', color: '#6366f1', order: 1, type: 'pipeline' },
-        { id: 'status2', name: '2. Đã Chăm sóc', color: '#f59e0b', order: 2, type: 'pipeline' },
-        { id: 'status3', name: '3. Tiềm năng Cao', color: '#ef4444', order: 3, type: 'pipeline' },
-        { id: 'status4', name: '4. Đã ký HĐ', color: '#22c55e', order: 4, type: 'win' },
-        { id: 'status6', name: '5. Đã giao xe', color: '#3b82f6', order: 5, type: 'delivered' },
-        { id: 'status5', name: '6. Lostsale', color: '#1f2937', order: 6, type: 'lostsale' },
-    ],
-    carModels: [
-        { id: 'model1', name: 'MG ZS' }, { id: 'model2', name: 'MG HS' }, { id: 'model3', name: 'MG RX5' }, { id: 'model4', name: 'MG GT' }, {id: 'model5', name: 'MG5'}
-    ],
-    customerSources: [
-        { id: 'source1', name: 'Facebook' }, { id: 'source2', name: 'Website' }, { id: 'source3', name: 'Showroom' }, { id: 'source4', name: 'Giới thiệu' }, { id: 'source5', name: 'Zalo' }
-    ],
-    marketingSpends: [
-        { id: 'spend1', name: 'Facebook', amount: 15000000 },
-        { id: 'spend2', name: 'Website', amount: 25000000 },
-        { id: 'spend3', name: 'Showroom', amount: 5000000 },
-        { id: 'spend4', name: 'Giới thiệu', amount: 0 },
-        { id: 'spend5', name: 'Zalo', amount: 8000000 },
-    ],
-    customers: [
-        { id: 'cust_1', name: 'Trần Văn Hùng', phone: '0905123456', email: 'hung.tran@email.com', carModel: 'MG ZS', source: 'Facebook', statusId: 'status6', city: 'Hà Nội', notes: 'Đã giao xe, khách hàng hài lòng.', salesValue: 550000000, tier: 'WARM', createdDate: 1717213400000, lastContactDate: 1719460000000, interactions: [ { id: 'int_1_1', type: 'test_drive', date: 1719287400000, notes: 'Khách hàng lái thử, rất hài lòng.', duration: 60, outcome: 'positive', userId: 'user_2' } ], userId: 'user_2' },
-        { id: 'cust_2', name: 'Lê Thị Mai', phone: '0987654321', email: 'mai.le@email.com', carModel: 'MG HS', source: 'Website', statusId: 'status3', city: 'TP Hồ Chí Minh', notes: 'Đang phân vân giữa MG HS và đối thủ. Cần follow-up chặt.', salesValue: 780000000, tier: 'HOT', createdDate: 1717313400000, lastContactDate: 1719560000000, interactions: [ { id: 'int_2_1', type: 'quotation', date: 1719560000000, notes: 'Gửi báo giá bản cao nhất.', duration: 15, outcome: 'neutral', userId: 'user_2' } ], userId: 'user_2' },
-        { id: 'cust_3', name: 'Phạm Văn Đức', phone: '0912345678', carModel: 'MG RX5', source: 'Showroom', statusId: 'status2', city: 'Đà Nẵng', notes: 'Khách vãng lai, đã lấy thông tin.', salesValue: 850000000, tier: 'COLD', createdDate: 1717413400000, lastContactDate: 1718990000000, interactions: [ { id: 'int_3_1', type: 'call', date: 1718990000000, notes: 'Gọi lại hỏi thăm, khách đang bận.', duration: 2, outcome: 'neutral', userId: 'user_3' } ], userId: 'user_3' },
-        { id: 'cust_4', name: 'Nguyễn Thị Thu', phone: '0333444555', carModel: 'MG GT', source: 'Giới thiệu', statusId: 'status6', city: 'Hải Phòng', salesValue: 650000000, tier: 'WARM', createdDate: 1716213400000, lastContactDate: 1718855400000, interactions: [], userId: 'user_3' },
-        { id: 'cust_5', name: 'Hoàng Văn Nam', phone: '0888999111', carModel: 'MG5', source: 'Zalo', statusId: 'status5', city: 'Cần Thơ', notes: 'Khách đã mua xe hãng khác.', salesValue: 580000000, tier: 'LOST', createdDate: 1716313400000, lastContactDate: 1719123400000, interactions: [ { id: 'int_5_1', type: 'meeting', date: 1719023400000, notes: 'Gặp trao đổi nhưng khách chê giá.', duration: 45, outcome: 'negative', userId: 'user_2' } ], userId: 'user_2' },
-        { id: 'cust_6', name: 'Vũ Thị Lan Anh', phone: '0978111222', carModel: 'MG ZS', source: 'Facebook', statusId: 'status4', city: 'Bình Dương', salesValue: 560000000, tier: 'HOT', createdDate: 1717813400000, lastContactDate: 1719630000000, interactions: [ { id: 'int_6_1', type: 'call', date: 1719630000000, notes: 'Xác nhận lại thông tin hợp đồng.', duration: 10, outcome: 'positive', userId: 'user_3' } ], userId: 'user_3' },
-        { id: 'cust_7', name: 'Đặng Minh Quang', phone: '0945555888', email: 'quang.dang@email.com', carModel: 'MG HS', source: 'Website', statusId: 'status1', city: 'Hà Nội', salesValue: 790000000, tier: 'COLD', createdDate: 1719546200000, lastContactDate: 1719546200000, interactions: [] },
-        { id: 'cust_8', name: 'Bùi Thị Kim Oanh', phone: '0356789123', carModel: 'MG HS', source: 'Showroom', statusId: 'status3', city: 'Bắc Ninh', notes: 'Vợ chồng xem xe, vợ rất thích. Chồng đang cân nhắc tài chính.', salesValue: 800000000, tier: 'HOT', createdDate: 1718013400000, lastContactDate: 1719461000000, interactions: [], userId: 'user_3' },
-        { id: 'cust_9', name: 'Đỗ Tiến Dũng', phone: '0988123789', carModel: 'MG RX5', source: 'Giới thiệu', statusId: 'status2', city: 'TP Hồ Chí Minh', salesValue: 860000000, tier: 'WARM', createdDate: 1718113400000, lastContactDate: 1719287400000, interactions: [ { id: 'int_9_1', type: 'email', date: 1719287400000, notes: 'Gửi thông số kỹ thuật chi tiết.', duration: 5, outcome: 'neutral', userId: 'user_2' } ], userId: 'user_2' },
-        { id: 'cust_10', name: 'Hồ Thị Bích', phone: '0965432198', carModel: 'MG5', source: 'Zalo', statusId: 'status5', city: 'Vũng Tàu', notes: 'Không liên lạc được.', salesValue: 585000000, tier: 'LOST', createdDate: 1717513400000, lastContactDate: 1718855400000, interactions: [], userId: 'user_3' },
-        { id: 'cust_11', name: 'Lý Văn Tài', phone: '0398765432', carModel: 'MG ZS', source: 'Facebook', statusId: 'status1', city: 'Đồng Nai', salesValue: 555000000, tier: 'COLD', createdDate: 1719631000000, lastContactDate: 1719631000000, interactions: [] },
-        { id: 'cust_12', name: 'Mai Anh Tuấn', phone: '0911223344', email: 'tuan.mai@email.com', carModel: 'MG GT', source: 'Website', statusId: 'status2', city: 'Hà Nội', salesValue: 660000000, tier: 'WARM', createdDate: 1718513400000, lastContactDate: 1719562000000, interactions: [ { id: 'int_12_1', type: 'call', date: 1719562000000, notes: 'Tư vấn về gói phụ kiện.', duration: 15, outcome: 'positive', userId: 'user_3' } ], userId: 'user_3' },
-        { id: 'cust_13', name: 'Dương Thị Yến', phone: '0344556677', carModel: 'MG HS', source: 'Showroom', statusId: 'status6', city: 'Bình Phước', salesValue: 795000000, tier: 'WARM', createdDate: 1715513400000, lastContactDate: 1717460000000, interactions: [], userId: 'user_2' },
-        { id: 'cust_14', name: 'Châu Văn Toàn', phone: '0909888777', carModel: 'MG RX5', source: 'Giới thiệu', statusId: 'status3', city: 'TP Hồ Chí Minh', salesValue: 870000000, tier: 'HOT', createdDate: 1718813400000, lastContactDate: 1719633000000, interactions: [ { id: 'int_14_1', type: 'meeting', date: 1719633000000, notes: 'Gặp tại quán cafe, khách đã gần chốt.', duration: 60, outcome: 'positive', userId: 'user_3' } ], userId: 'user_3' },
-        { id: 'cust_15', name: 'Tạ Thị Hiền', phone: '0981981981', carModel: 'MG5', source: 'Website', statusId: 'status2', city: 'Hà Nội', salesValue: 590000000, tier: 'WARM', createdDate: 1719013400000, lastContactDate: 1719465000000, interactions: [], userId: 'user_2' }
-    ],
-    reminders: [
-        { id: 'rem_1', customerId: 'cust_2', userId: 'user_2', title: 'Gọi lại chốt deal MG HS', description: 'Follow-up về báo giá và chương trình khuyến mãi tháng 6.', dueDate: Date.now() + 2 * 24 * 60 * 60 * 1000, completed: false, priority: 'high' },
-        { id: 'rem_2', customerId: 'cust_8', userId: 'user_3', title: 'Mời khách lái thử lại', description: 'Vợ thích nhưng chồng còn lăn tăn, mời cả 2 vợ chồng đến lái thử cuối tuần.', dueDate: Date.now() + 4 * 24 * 60 * 60 * 1000, completed: false, priority: 'high' },
-        { id: 'rem_3', customerId: 'cust_9', userId: 'user_2', title: 'Gửi thông tin trả góp', description: 'Khách hỏi về phương án vay ngân hàng, chuẩn bị file gửi khách.', dueDate: Date.now() + 1 * 24 * 60 * 60 * 1000, completed: false, priority: 'medium' },
-        { id: 'rem_4', customerId: 'cust_3', userId: 'user_3', title: 'Chăm sóc lại khách vãng lai', description: 'Gọi lại hỏi thăm, xem nhu cầu của khách tới đâu.', dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000, completed: false, priority: 'low' },
-        { id: 'rem_5', customerId: 'cust_1', userId: 'user_2', title: 'Hỏi thăm sau giao xe', description: 'Gọi hỏi thăm tình hình sử dụng xe, nhắc lịch bảo dưỡng lần đầu.', dueDate: Date.now() - 5 * 24 * 60 * 60 * 1000, completed: true, priority: 'medium' }
-    ],
-    salesGoals: [],
-};
-
-const LOCAL_STORAGE_KEY = 'crm_app_data';
-
-// FIX: Export dataService to be used in AuthProvider
-export const dataService = {
-    getData: (): { users: User[], crmData: CrmData } => {
-        const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (storedData) {
-            try {
-                const parsedData = JSON.parse(storedData);
-                if (parsedData.crmData && parsedData.crmData.customers && parsedData.crmData.customers.length > 0) {
-                     return parsedData;
-                }
-            } catch (e) {
-                console.error("Could not parse data from localStorage, resetting.", e);
-            }
-        }
-        return dataService.seedData();
-    },
-    saveData: (users: User[], crmData: CrmData) => {
-        try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ users, crmData }));
-        } catch (e) {
-            console.error("Failed to save data to localStorage", e);
-        }
-    },
-    seedData: (): { users: User[], crmData: CrmData } => {
-        const users: User[] = MOCK_USERS_SEED.map((user, index) => ({
-            ...user,
-            id: `user_${index + 1}`,
-            password: user.username 
-        }));
-        
-        const user2Id = users.find(u => u.username === 'user')?.id || 'user_2';
-        const user3Id = users.find(u => u.username === 'user2')?.id || 'user_3';
-
-        const seededCrmData = { ...MOCK_INITIAL_DATA };
-        
-        // Assign users to customers, leaving some unassigned
-        seededCrmData.customers.forEach(customer => {
-            if (customer.id === 'cust_7' || customer.id === 'cust_11') {
-                delete customer.userId; // Ensure these are unassigned
-            } else if (!customer.userId) { // Assign only if not manually set in mock
-                 customer.userId = customer.id.endsWith('2') || customer.id.endsWith('5') || customer.id.endsWith('9') || customer.id.endsWith('13') || customer.id.endsWith('15') ? user2Id : user3Id;
-            }
-        });
-
-         seededCrmData.reminders.forEach(reminder => {
-             reminder.userId = reminder.id.endsWith('1') || reminder.id.endsWith('3') || reminder.id.endsWith('5') ? user2Id : user3Id;
-        });
-
-        const initialData = { users, crmData: seededCrmData };
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialData));
-        return initialData;
-    },
-    deleteAllCrmData: (): { users: User[], crmData: CrmData } => {
-        const { users } = dataService.getData();
-        const emptyCrmData: CrmData = {
-            customers: [], reminders: [], salesGoals: [],
-            statuses: MOCK_INITIAL_DATA.statuses, 
-            carModels: MOCK_INITIAL_DATA.carModels, 
-            customerSources: MOCK_INITIAL_DATA.customerSources,
-            marketingSpends: MOCK_INITIAL_DATA.marketingSpends,
-        };
-        const newData = { users, crmData: emptyCrmData };
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newData));
-        return newData;
-    }
-};
-// END: MOCK DATA & LOCAL STORAGE SERVICE
-
 
 // START: CONTEXT DEFINITIONS
 interface NotificationContextType {
@@ -135,7 +12,6 @@ interface NotificationContextType {
 }
 export const NotificationContext = createContext<NotificationContextType | null>(null);
 
-// FIX: Changed CrmContextType from an invalid interface extension to a type alias.
 type CrmContextType = ReturnType<typeof useCrmDataManager>;
 export const CrmContext = createContext<CrmContextType | null>(null);
 
@@ -149,14 +25,11 @@ export const useCrm = () => {
 // END: CONTEXT DEFINITIONS
 
 
-// START: CUSTOM HOOK for CRM Data Logic
-// FIX: Export useCrmDataManager so it can be used by AuthProvider in another file.
+// START: CUSTOM HOOK for CRM Data Logic with FIREBASE
 export const useCrmDataManager = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [crmData, setCrmData] = useState<CrmData>({ customers: [], statuses: [], carModels: [], customerSources: [], reminders: [], salesGoals: [], marketingSpends: [] });
     const [isLoading, setIsLoading] = useState(true);
-
-    // Auth state moved here
     const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -166,10 +39,13 @@ export const useCrmDataManager = () => {
     const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
     const [theme, setTheme] = useState('light');
 
+    // This is a ref to hold the addNotification function provided by the context
+    const addNotificationRef = useRef<(message: string, type: 'success' | 'error') => void>(() => {});
+
+    // FIX: Create a stable function to call the notification function from the ref.
+    // This function can be passed to components and used in handlers.
     const addNotification = useCallback((message: string, type: 'success' | 'error') => {
-        // This function will be provided by NotificationProvider, but we need a placeholder
-        // In a real app, you'd likely use a more robust system that doesn't require passing this down.
-        console.log(`Notification (${type}): ${message}`);
+        addNotificationRef.current(message, type);
     }, []);
 
     useEffect(() => {
@@ -179,12 +55,61 @@ export const useCrmDataManager = () => {
         const initialTheme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
         setTheme(initialTheme);
 
-        // Initialize user from sessionStorage
-        const storedUser = sessionStorage.getItem('currentUser');
-        if (storedUser) {
-            setCurrentUser(JSON.parse(storedUser));
-        }
+        // Firebase Auth state listener
+        // FIX: Use v8 auth syntax
+        const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+            if (firebaseUser) {
+                // Fetch user role from Firestore
+                // FIX: Use v8 firestore syntax
+                const userDocRef = db.collection("users").doc(firebaseUser.uid);
+                const userDocSnap = await userDocRef.get();
+                if (userDocSnap.exists) {
+                    setCurrentUser({ id: firebaseUser.uid, ...userDocSnap.data() } as User);
+                } else {
+                    console.error("User data not found in Firestore!");
+                    setCurrentUser(null);
+                }
+            } else {
+                setCurrentUser(null);
+            }
+            setIsLoading(false);
+        });
+
+        return () => unsubscribe();
     }, []);
+
+    // Effect to listen for all data from Firestore in real-time
+    useEffect(() => {
+        if (!currentUser) {
+            // Clear data when user logs out
+            setCrmData({ customers: [], statuses: [], carModels: [], customerSources: [], reminders: [], salesGoals: [], marketingSpends: [] });
+            return;
+        }
+
+        const collections: (keyof CrmData)[] = ['customers', 'statuses', 'carModels', 'customerSources', 'reminders', 'marketingSpends'];
+        // FIX: Use v8 firestore syntax
+        const unsubscribes = collections.map(colName => {
+            return db.collection(colName).onSnapshot((snapshot) => {
+                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // @ts-ignore
+                setCrmData(prev => ({ ...prev, [colName]: data }));
+            });
+        });
+        
+        // Listen to users collection
+         // FIX: Use v8 firestore syntax
+         const unsubUsers = db.collection("users").onSnapshot((snapshot) => {
+            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setUsers(usersData);
+        });
+
+        return () => {
+            unsubscribes.forEach(unsub => unsub());
+            unsubUsers();
+        };
+
+    }, [currentUser]);
+
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -200,78 +125,27 @@ export const useCrmDataManager = () => {
         setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
     }, []);
 
-    useEffect(() => {
-        const { users: loadedUsers, crmData: loadedCrmData } = dataService.getData();
-        setUsers(loadedUsers);
-        setCrmData(loadedCrmData);
-        setIsLoading(false);
-    }, []);
-
-    // Automated Reminders Hook
-    useEffect(() => {
-        if (isLoading) return;
-
-        const lastCheck = localStorage.getItem('lastAutoReminderCheck');
-        const now = Date.now();
-        const twelveHours = 12 * 60 * 60 * 1000;
-
-        if (lastCheck && (now - parseInt(lastCheck, 10)) < twelveHours) return;
-
-        const pipelineStatusIds = new Set(crmData.statuses.filter(s => s.type === 'pipeline').map(s => s.id));
-        const newReminders: Reminder[] = [];
-
-        crmData.customers.forEach(customer => {
-            if (!customer.userId || !pipelineStatusIds.has(customer.statusId)) return;
-            const tierConfig = CUSTOMER_TIERS.find(t => t.value === customer.tier);
-            if (!tierConfig || tierConfig.reminderDays === 0) return;
-            const followUpDeadline = customer.lastContactDate + (tierConfig.reminderDays * 24 * 60 * 60 * 1000);
-            const needsFollowUp = now > followUpDeadline;
-            const hasExistingAutoReminder = crmData.reminders.some(r => r.customerId === customer.id && r.isAuto && !r.completed);
-
-            if (needsFollowUp && !hasExistingAutoReminder) {
-                const priorityMap: Record<string, Reminder['priority']> = { HOT: 'high', WARM: 'medium', COLD: 'low' };
-                const newReminder: Reminder = {
-                    id: `rem_auto_${Date.now()}_${customer.id}`, customerId: customer.id, userId: customer.userId,
-                    title: `Tự động: Chăm sóc lại KH ${customer.name}`,
-                    description: `Khách hàng ${customer.tier} đã quá ${tierConfig.reminderDays} ngày chưa được liên hệ. Cần gọi lại hỏi thăm.`,
-                    dueDate: now, completed: false, priority: priorityMap[customer.tier] || 'low', isAuto: true,
-                };
-                newReminders.push(newReminder);
-            }
-        });
-
-        if (newReminders.length > 0) {
-            setCrmData(prev => ({ ...prev, reminders: [...prev.reminders, ...newReminders] }));
-            addNotification(`Đã tự động tạo ${newReminders.length} nhắc hẹn chăm sóc.`, 'success');
-        }
-        localStorage.setItem('lastAutoReminderCheck', now.toString());
-    }, [crmData.customers, crmData.statuses, crmData.reminders, isLoading, addNotification]);
-
-    useEffect(() => {
-        if (!isLoading) {
-            dataService.saveData(users, crmData);
-        }
-    }, [users, crmData, isLoading]);
-
-    const login = async (username: string, password: string): Promise<boolean> => {
-        const { users: allUsers } = dataService.getData();
-        const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password) || null;
-        if (user) {
-            const userToStore = { ...user };
-            delete userToStore.password;
-            sessionStorage.setItem('currentUser', JSON.stringify(userToStore));
-            setCurrentUser(userToStore);
+    const login = async (email: string, password: string): Promise<boolean> => {
+        try {
+            // FIX: Use v8 auth syntax
+            await auth.signInWithEmailAndPassword(email, password);
             return true;
+        } catch (error) {
+            console.error("Firebase login error:", error);
+            return false;
         }
-        return false;
     };
     
-    const logout = () => { 
-        sessionStorage.removeItem('currentUser');
-        setCurrentUser(null);
+    const logout = async () => { 
+        try {
+            // FIX: Use v8 auth syntax
+            await auth.signOut();
+        } catch (error) {
+            console.error("Firebase logout error:", error);
+        }
     };
-
-    // Data Filtering and Processing
+    
+    // Data Filtering and Processing (largely unchanged)
     const dashboardCustomers = useMemo(() => {
         if (!currentUser) return [];
         if (currentUser.role === Role.USER) return crmData.customers.filter(c => c.userId === currentUser.id);
@@ -316,80 +190,179 @@ export const useCrmDataManager = () => {
         return { paginatedCustomers: sorted.slice(startIndex, startIndex + pagination.itemsPerPage), totalFilteredCustomers: sorted.length };
     }, [filteredCustomers, sortConfig, pagination, users]);
 
-    // Handlers
-    const handleSaveCustomer = useCallback((customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
-        if (existingCustomerId) {
-            setCrmData(prev => ({ ...prev, customers: prev.customers.map(c => c.id === existingCustomerId ? { ...c, ...customerData, lastContactDate: Date.now() } : c) }));
-            addNotification('Cập nhật khách hàng thành công!', 'success');
-        } else {
-            const newCustomer: Partial<Customer> = { ...customerData, id: 'cust_' + Date.now(), createdDate: Date.now(), lastContactDate: Date.now(), interactions: [] };
-            if (currentUser?.role === Role.USER) newCustomer.userId = currentUser.id;
-            setCrmData(prev => ({ ...prev, customers: [...prev.customers, newCustomer as Customer] }));
-            addNotification('Thêm khách hàng mới thành công!', 'success');
+
+    // FIREBASE HANDLERS
+    const handleSaveCustomer = useCallback(async (customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
+        try {
+            if (existingCustomerId) {
+                // FIX: Use v8 firestore syntax
+                const customerRef = db.collection("customers").doc(existingCustomerId);
+                await customerRef.update({ ...customerData, lastContactDate: Date.now() });
+                addNotification('Cập nhật khách hàng thành công!', 'success');
+            } else {
+                const newCustomer: Partial<Customer> = { ...customerData, createdDate: Date.now(), lastContactDate: Date.now(), interactions: [] };
+                if (currentUser?.role === Role.USER) newCustomer.userId = currentUser.id;
+                // FIX: Use v8 firestore syntax
+                await db.collection("customers").add(newCustomer);
+                addNotification('Thêm khách hàng mới thành công!', 'success');
+            }
+        } catch (e) {
+            console.error("Error saving customer: ", e);
+            addNotification('Lưu khách hàng thất bại!', 'error');
         }
     }, [currentUser, addNotification]);
 
-    const handleDelete = useCallback((ids: string[]) => {
-        const idsSet = new Set(ids);
-        setCrmData(prev => ({ ...prev, customers: prev.customers.filter(c => !idsSet.has(c.id)), reminders: prev.reminders.filter(r => !idsSet.has(r.customerId)) }));
-        addNotification(`Đã xóa ${ids.length} khách hàng.`, 'success');
-        setSelectedCustomerIds(new Set());
-    }, [addNotification]);
-    
-    const handleCustomerUpdate = useCallback((customerId: string, updates: Partial<Customer>) => {
-        setCrmData(prev => ({ ...prev, customers: prev.customers.map(c => c.id === customerId ? { ...c, ...updates, lastContactDate: Date.now() } : c) }));
-    }, []);
-
-    const handleAddInteraction = useCallback((customerId: string, interaction: Omit<Interaction, 'id'>) => {
-        const newInteraction = { ...interaction, id: 'int_' + Date.now() };
-        setCrmData(prev => ({ ...prev, customers: prev.customers.map(c => c.id === customerId ? { ...c, interactions: [...(c.interactions || []), newInteraction] } : c) }));
-        addNotification('Đã thêm tương tác mới.', 'success');
-    }, [addNotification]);
-
-    const handleDeleteInteraction = useCallback((customerId: string, interactionId: string) => {
-         setCrmData(prev => ({ ...prev, customers: prev.customers.map(c => c.id === customerId ? { ...c, interactions: c.interactions.filter(i => i.id !== interactionId) } : c) }));
-         addNotification('Đã xóa tương tác.', 'success');
-    }, [addNotification]);
-
-    const handleSaveReminder = useCallback((reminderData: Omit<Reminder, 'id'>, existingReminderId?: string) => {
-        if (existingReminderId) {
-            setCrmData(prev => ({ ...prev, reminders: prev.reminders.map(r => r.id === existingReminderId ? { ...r, ...reminderData } : r) }));
-            addNotification('Cập nhật nhắc hẹn thành công.', 'success');
-        } else {
-            const newReminder = { ...reminderData, id: 'rem_' + Date.now() };
-            setCrmData(prev => ({ ...prev, reminders: [...prev.reminders, newReminder] }));
-            addNotification('Đã thêm nhắc hẹn mới.', 'success');
+    const handleDelete = useCallback(async (ids: string[]) => {
+        try {
+            // FIX: Use v8 firestore syntax
+            const batch = db.batch();
+            ids.forEach(id => {
+                const customerRef = db.collection("customers").doc(id);
+                batch.delete(customerRef);
+                // Also delete related reminders if needed (requires querying)
+            });
+            await batch.commit();
+            addNotification(`Đã xóa ${ids.length} khách hàng.`, 'success');
+            setSelectedCustomerIds(new Set());
+        } catch (e) {
+            console.error("Error deleting customers: ", e);
+            addNotification('Xóa khách hàng thất bại!', 'error');
         }
     }, [addNotification]);
     
-    const handleDeleteReminder = useCallback((reminderId: string) => {
-        setCrmData(prev => ({ ...prev, reminders: prev.reminders.filter(r => r.id !== reminderId) }));
-        addNotification('Đã xóa nhắc hẹn.', 'success');
+    const handleCustomerUpdate = useCallback(async (customerId: string, updates: Partial<Customer>) => {
+        try {
+            // FIX: Use v8 firestore syntax
+            const customerRef = db.collection("customers").doc(customerId);
+            await customerRef.update({ ...updates, lastContactDate: Date.now() });
+        } catch(e) {
+            console.error("Error updating customer: ", e);
+            addNotification('Cập nhật thất bại!', 'error');
+        }
     }, [addNotification]);
 
-    const handleToggleReminderComplete = useCallback((reminderId: string) => {
-        let isCompleted = false;
-        setCrmData(prev => ({ ...prev, reminders: prev.reminders.map(r => { if (r.id === reminderId) { isCompleted = !r.completed; return { ...r, completed: isCompleted }; } return r; }) }));
-        addNotification(isCompleted ? 'Đã hoàn thành nhắc hẹn!' : 'Đã đánh dấu chưa hoàn thành.', 'success');
+    const handleAddInteraction = useCallback(async (customerId: string, interaction: Omit<Interaction, 'id'>) => {
+        try {
+            const newInteraction = { ...interaction, id: 'int_' + Date.now() };
+            // FIX: Use v8 firestore syntax with FieldValue
+            const customerRef = db.collection("customers").doc(customerId);
+            await customerRef.update({
+                interactions: firebase.firestore.FieldValue.arrayUnion(newInteraction)
+            });
+            addNotification('Đã thêm tương tác mới.', 'success');
+        } catch (e) {
+             console.error("Error adding interaction: ", e);
+            addNotification('Thêm tương tác thất bại!', 'error');
+        }
     }, [addNotification]);
 
-    const handleToggleSelectCustomer = useCallback((customerId: string) => {
-        setSelectedCustomerIds(prev => { const newSet = new Set(prev); if (newSet.has(customerId)) newSet.delete(customerId); else newSet.add(customerId); return newSet; });
+    const handleDeleteInteraction = useCallback(async (customerId: string, interactionId: string) => {
+        try {
+            // FIX: Use v8 firestore syntax with FieldValue
+            const customerRef = db.collection("customers").doc(customerId);
+            const customerDoc = await customerRef.get();
+            if(customerDoc.exists){
+                const customerData = customerDoc.data() as Customer;
+                const interactionToDelete = customerData.interactions.find(i => i.id === interactionId);
+                if(interactionToDelete) {
+                    await customerRef.update({
+                        interactions: firebase.firestore.FieldValue.arrayRemove(interactionToDelete)
+                    });
+                     addNotification('Đã xóa tương tác.', 'success');
+                }
+            }
+        } catch (e) {
+             console.error("Error deleting interaction: ", e);
+            addNotification('Xóa tương tác thất bại!', 'error');
+        }
+    }, [addNotification]);
+
+    const handleSaveReminder = useCallback(async (reminderData: Omit<Reminder, 'id'>, existingReminderId?: string) => {
+        try {
+            if (existingReminderId) {
+                // FIX: Use v8 firestore syntax
+                const reminderRef = db.collection("reminders").doc(existingReminderId);
+                await reminderRef.update(reminderData);
+                addNotification('Cập nhật nhắc hẹn thành công.', 'success');
+            } else {
+                // FIX: Use v8 firestore syntax
+                await db.collection("reminders").add(reminderData);
+                addNotification('Đã thêm nhắc hẹn mới.', 'success');
+            }
+        } catch(e) {
+             console.error("Error saving reminder: ", e);
+            addNotification('Lưu nhắc hẹn thất bại!', 'error');
+        }
+    }, [addNotification]);
+    
+    const handleDeleteReminder = useCallback(async (reminderId: string) => {
+        try {
+            // FIX: Use v8 firestore syntax
+            await db.collection("reminders").doc(reminderId).delete();
+            addNotification('Đã xóa nhắc hẹn.', 'success');
+        } catch (e) {
+             console.error("Error deleting reminder: ", e);
+            addNotification('Xóa nhắc hẹn thất bại!', 'error');
+        }
+    }, [addNotification]);
+
+    const handleToggleReminderComplete = useCallback(async (reminderId: string) => {
+        try {
+            // FIX: Use v8 firestore syntax
+            const reminderRef = db.collection("reminders").doc(reminderId);
+            const reminderDoc = await reminderRef.get();
+            if(reminderDoc.exists){
+                const currentStatus = reminderDoc.data()?.completed;
+                await reminderRef.update({ completed: !currentStatus });
+                addNotification(!currentStatus ? 'Đã hoàn thành nhắc hẹn!' : 'Đã đánh dấu chưa hoàn thành.', 'success');
+            }
+        } catch (e) {
+             console.error("Error toggling reminder: ", e);
+        }
+    }, [addNotification]);
+    
+    const handleToggleSelectCustomer = useCallback((id: string) => {
+        setSelectedCustomerIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
     }, []);
 
     const handleToggleSelectAll = useCallback(() => {
-        const currentIdsOnPage = new Set(paginatedCustomers.map(c => c.id));
-        if (paginatedCustomers.every(c => selectedCustomerIds.has(c.id))) {
-             setSelectedCustomerIds(prev => { const newSet = new Set(prev); currentIdsOnPage.forEach(id => newSet.delete(id)); return newSet; });
-        } else {
-            setSelectedCustomerIds(prev => new Set([...prev, ...currentIdsOnPage]));
-        }
+        const paginatedIds = paginatedCustomers.map(c => c.id);
+        const areAllOnPageSelected = paginatedIds.length > 0 && paginatedIds.every(id => selectedCustomerIds.has(id));
+
+        setSelectedCustomerIds(prev => {
+            const newSet = new Set(prev);
+            if (areAllOnPageSelected) {
+                paginatedIds.forEach(id => newSet.delete(id));
+            } else {
+                paginatedIds.forEach(id => newSet.add(id));
+            }
+            return newSet;
+        });
     }, [paginatedCustomers, selectedCustomerIds]);
 
-    const handleBulkUpdate = useCallback((updates: Partial<Customer>) => {
-        setCrmData(prev => ({ ...prev, customers: prev.customers.map(c => selectedCustomerIds.has(c.id) ? { ...c, ...updates, lastContactDate: Date.now() } : c) }));
-        addNotification(`Đã cập nhật ${selectedCustomerIds.size} khách hàng.`, 'success');
-        setSelectedCustomerIds(new Set());
+    const handleBulkUpdate = useCallback(async (updates: Partial<Customer>) => {
+        try {
+            // FIX: Use v8 firestore syntax
+            const batch = db.batch();
+            selectedCustomerIds.forEach(id => {
+                const customerRef = db.collection("customers").doc(id);
+                batch.update(customerRef, { ...updates, lastContactDate: Date.now() });
+            });
+            await batch.commit();
+            addNotification(`Đã cập nhật ${selectedCustomerIds.size} khách hàng.`, 'success');
+            setSelectedCustomerIds(new Set());
+        } catch(e) {
+            console.error("Error with bulk update:", e);
+             addNotification('Cập nhật hàng loạt thất bại!', 'error');
+        }
     }, [selectedCustomerIds, addNotification]);
 
     const handleSort = useCallback((key: keyof Customer) => {
@@ -417,8 +390,9 @@ export const useCrmDataManager = () => {
         handleToggleSelectCustomer, handleToggleSelectAll, handleBulkUpdate, clearSelection,
         // Theme
         theme, toggleTheme,
-        // Layout component
+        // Notification
         addNotification,
+        addNotificationRef, // Return ref for provider
     };
 };
 // END: CUSTOM HOOK

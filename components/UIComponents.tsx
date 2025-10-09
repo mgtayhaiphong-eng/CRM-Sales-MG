@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useRef, createContext, useContext, useCallback } from 'react';
 import { Chart } from 'chart.js';
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData, type MarketingSpend } from '../types';
 import { VIETNAM_CITIES, CUSTOMER_TIERS } from '../constants';
-// FIX: Added imports for useCrmDataManager and CrmContext to be used in AuthProvider.
-import { useCrm, useCrmDataManager, CrmContext } from '../services/firebase';
+import { useCrmDataManager, CrmContext, NotificationContext } from '../services/firebase';
 
 // START: ICONS
 export const Icon: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className }) => (
@@ -1163,27 +1162,28 @@ export const ReminderFormModal: React.FC<ReminderFormModalProps> = ({isOpen, onC
 // START: NOTIFICATION SYSTEM & AUTH
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [notifications, setNotifications] = useState<{id: number, message: string, type: 'success' | 'error'}[]>([]);
-    const { addNotification: setNotificationCallback } = useCrm();
+    const { addNotificationRef } = useContext(CrmContext)!;
 
-    const addNotification = React.useCallback((message: string, type: 'success' | 'error') => {
+    const addNotification = useCallback((message: string, type: 'success' | 'error') => {
         const id = Date.now();
         setNotifications(prev => [...prev, { id, message, type }]);
         setTimeout(() => {
             setNotifications(prev => prev.filter(n => n.id !== id));
         }, 4000);
     }, []);
-
-    React.useEffect(() => {
-        // A bit of a hack to lift the addNotification function up to the hook
-        (setNotificationCallback as any).current = addNotification;
-    }, [addNotification, setNotificationCallback]);
-
+    
+    useEffect(() => {
+        // FIX: The context now provides addNotificationRef directly.
+        if (addNotificationRef) {
+            (addNotificationRef as React.MutableRefObject<any>).current = addNotification;
+        }
+    }, [addNotification, addNotificationRef]);
 
     return (
-        <>
-            {children}
+        <NotificationContext.Provider value={{ addNotification }}>
+             {children}
             <NotificationToasts notifications={notifications} />
-        </>
+        </NotificationContext.Provider>
     );
 };
 

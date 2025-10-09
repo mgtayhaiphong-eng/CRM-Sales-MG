@@ -13,7 +13,6 @@ import {
     Trash2Icon,
 } from '../components/UIComponents';
 
-// FIX: Added the missing UpcomingReminders component definition.
 const UpcomingReminders: React.FC<{
     reminders: Reminder[],
     customers: Customer[],

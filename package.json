@@ -12,7 +12,8 @@
     "@google/genai": "latest",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "chart.js": "^4.5.0"
+    "chart.js": "^4.5.0",
+    "firebase": "^12.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
