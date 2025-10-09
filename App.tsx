@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
 import { Chart, DoughnutController, ArcElement, BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend, PieController, LineController, PointElement, LineElement, Filler } from 'chart.js';
 import { Role, type User, type Customer, type Status, type CarModel, type CustomerSource, type Interaction, type Reminder, type CrmData, type MarketingSpend } from './types';
@@ -53,6 +51,8 @@ export const CheckCircleIcon = ({ className = "w-5 h-5" }) => <Icon className={c
 export const MenuIcon = ({ className = "w-6 h-6" }) => <Icon className={className}><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>;
 export const FolderPlusIcon = ({ className = "w-12 h-12" }) => <Icon className={className}><path d="M20 12h-8"/><path d="M16 16V8"/><path d="M2 17.6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-2h4l2 2h4a2 2 0 0 1 2 2v2.4"/></Icon>;
 export const BotIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></Icon>;
+export const ChevronsUpDownIcon = ({ className = "w-4 h-4" }) => <Icon className={className}><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></Icon>;
+
 // END: ICONS
 
 
@@ -910,9 +910,86 @@ const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedCount, statuses, 
     );
 };
 
+interface PaginationControlsProps {
+    currentPage: number;
+    totalPages: number;
+    itemsPerPage: number;
+    totalItems: number;
+    onPageChange: (page: number) => void;
+    onItemsPerPageChange: (items: number) => void;
+}
+const PaginationControls: React.FC<PaginationControlsProps> = ({ currentPage, totalPages, itemsPerPage, totalItems, onPageChange, onItemsPerPageChange }) => {
+    if (totalItems <= itemsPerPage && currentPage === 1) return null;
+
+    const startItem = (currentPage - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+    return (
+        <div className="flex flex-col sm:flex-row justify-between items-center mt-4 text-sm text-gray-600">
+            <div className="flex items-center mb-2 sm:mb-0">
+                <span className="mr-2">Hiển thị</span>
+                <select 
+                    value={itemsPerPage} 
+                    onChange={e => onItemsPerPageChange(Number(e.target.value))}
+                    className="p-1 border rounded-md"
+                >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                </select>
+                <span className="ml-2">kết quả</span>
+            </div>
+            <div className="flex items-center">
+                <span>{startItem}-{endItem} của {totalItems}</span>
+                <div className="ml-4">
+                    <button 
+                        onClick={() => onPageChange(currentPage - 1)} 
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 border rounded-l-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                    >
+                        Trước
+                    </button>
+                    <button 
+                        onClick={() => onPageChange(currentPage + 1)} 
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 border-t border-b border-r rounded-r-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                    >
+                        Sau
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+interface SortableHeaderProps {
+    label: string;
+    sortKey: keyof Customer;
+    currentSortKey: keyof Customer;
+    direction: 'ascending' | 'descending';
+    onSort: (key: keyof Customer) => void;
+    className?: string;
+}
+const SortableHeader: React.FC<SortableHeaderProps> = ({ label, sortKey, currentSortKey, direction, onSort, className }) => {
+    const isSorting = currentSortKey === sortKey;
+    return (
+        <th scope="col" className={`px-6 py-3 ${className}`}>
+            <button onClick={() => onSort(sortKey)} className="flex items-center gap-1 group">
+                {label}
+                {isSorting ? (
+                    direction === 'ascending' ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />
+                ) : (
+                    <ChevronsUpDownIcon className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100" />
+                )}
+            </button>
+        </th>
+    );
+};
+
 
 interface ListViewProps {
     customers: Customer[];
+    totalCustomers: number;
     statuses: Status[];
     onCustomerEdit: (customer: Customer) => void;
     onCustomerDelete: (ids: string[]) => void;
@@ -926,8 +1003,12 @@ interface ListViewProps {
     selectedCustomerIds: Set<string>;
     onToggleSelectCustomer: (id: string) => void;
     onToggleSelectAll: () => void;
+    sortConfig: { key: keyof Customer, direction: 'ascending' | 'descending' };
+    handleSort: (key: keyof Customer) => void;
+    pagination: { currentPage: number, itemsPerPage: number };
+    setPagination: React.Dispatch<React.SetStateAction<{currentPage: number, itemsPerPage: number}>>;
 }
-export const ListView: React.FC<ListViewProps> = ({ customers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, onAddCustomer, users, currentUser, selectedUserId, onSelectedUserChange, searchTerm, selectedCustomerIds, onToggleSelectCustomer, onToggleSelectAll }) => {
+export const ListView: React.FC<ListViewProps> = ({ customers, totalCustomers, statuses, onCustomerEdit, onCustomerDelete, onGenerateScript, onAddCustomer, users, currentUser, selectedUserId, onSelectedUserChange, searchTerm, selectedCustomerIds, onToggleSelectCustomer, onToggleSelectAll, sortConfig, handleSort, pagination, setPagination }) => {
     
     const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'Chưa phân công';
     
@@ -938,7 +1019,7 @@ export const ListView: React.FC<ListViewProps> = ({ customers, statuses, onCusto
     return (
         <div className="bg-white rounded-xl shadow p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <h2 className="text-xl font-bold text-gray-800">Danh sách Khách hàng ({customers.length})</h2>
+                <h2 className="text-xl font-bold text-gray-800">Danh sách Khách hàng ({totalCustomers})</h2>
                 {currentUser.role === Role.ADMIN && (
                     <div>
                         <label htmlFor="user-filter" className="text-sm font-medium mr-2">NV Sales:</label>
@@ -961,13 +1042,13 @@ export const ListView: React.FC<ListViewProps> = ({ customers, statuses, onCusto
                                     onChange={onToggleSelectAll}
                                 />
                             </th>
-                            <th scope="col" className="px-6 py-3">Tên</th>
+                            <SortableHeader label="Tên" sortKey="name" currentSortKey={sortConfig.key} direction={sortConfig.direction} onSort={handleSort} />
                             <th scope="col" className="px-6 py-3 hidden md:table-cell">SĐT</th>
                             <th scope="col" className="px-6 py-3">Trạng thái</th>
                             <th scope="col" className="px-6 py-3 hidden lg:table-cell">Phân loại</th>
                             <th scope="col" className="px-6 py-3 hidden md:table-cell">Xe quan tâm</th>
-                            <th scope="col" className="px-6 py-3 hidden lg:table-cell">Ngày tạo</th>
-                            {currentUser.role === Role.ADMIN && <th scope="col" className="px-6 py-3 hidden lg:table-cell">NV Phụ trách</th>}
+                            <SortableHeader label="Ngày tạo" sortKey="createdDate" currentSortKey={sortConfig.key} direction={sortConfig.direction} onSort={handleSort} className="hidden lg:table-cell" />
+                            {currentUser.role === Role.ADMIN && <SortableHeader label="NV Phụ trách" sortKey="userId" currentSortKey={sortConfig.key} direction={sortConfig.direction} onSort={handleSort} className="hidden lg:table-cell" />}
                             <th scope="col" className="px-6 py-3 text-right">Hành động</th>
                         </tr>
                     </thead>
@@ -1014,7 +1095,7 @@ export const ListView: React.FC<ListViewProps> = ({ customers, statuses, onCusto
                         })}
                     </tbody>
                 </table>
-                 {customers.length === 0 && (
+                 {totalCustomers === 0 && (
                     <div className="border-t">
                         <EmptyState 
                             icon={<UsersIcon className="w-12 h-12"/>}
@@ -1025,6 +1106,14 @@ export const ListView: React.FC<ListViewProps> = ({ customers, statuses, onCusto
                     </div>
                 )}
             </div>
+             <PaginationControls 
+                currentPage={pagination.currentPage}
+                totalPages={Math.ceil(totalCustomers / pagination.itemsPerPage)}
+                itemsPerPage={pagination.itemsPerPage}
+                totalItems={totalCustomers}
+                onPageChange={(page) => setPagination(p => ({ ...p, currentPage: page }))}
+                onItemsPerPageChange={(items) => setPagination({ currentPage: 1, itemsPerPage: items })}
+            />
         </div>
     );
 };
@@ -2242,6 +2331,10 @@ const MainLayout: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [crmData, setCrmData] = useState<CrmData>({ customers: [], statuses: [], carModels: [], customerSources: [], reminders: [], salesGoals: [], marketingSpends: [] });
     const [isLoading, setIsLoading] = useState(true);
+    
+    const [sortConfig, setSortConfig] = useState<{ key: keyof Customer; direction: 'ascending' | 'descending' }>({ key: 'createdDate', direction: 'descending' });
+    const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
+
 
     useEffect(() => {
         const { users: loadedUsers, crmData: loadedCrmData } = dataService.getData();
@@ -2314,9 +2407,10 @@ const MainLayout: React.FC = () => {
     const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
     const [activeReminderCustomerId, setActiveReminderCustomerId] = useState<string | null>(null);
 
-    // Reset selection on filter/view change
+    // Reset selection and pagination on filter/view change
     useEffect(() => {
         setSelectedCustomerIds(new Set());
+        setPagination(p => ({ ...p, currentPage: 1 }));
     }, [searchTerm, activeView, selectedUserId]);
 
 
@@ -2360,6 +2454,38 @@ const MainLayout: React.FC = () => {
             (c.city && c.city.toLowerCase().includes(term))
         );
     }, [crmData.customers, searchTerm, currentUser.role, currentUser.id, selectedUserId]);
+    
+    const processedListViewCustomers = useMemo(() => {
+        const sorted = [...filteredCustomers].sort((a, b) => {
+            const key = sortConfig.key;
+            const direction = sortConfig.direction === 'ascending' ? 1 : -1;
+            
+            const valueA = a[key];
+            const valueB = b[key];
+            
+            if (valueA === undefined || valueA === null) return 1 * direction;
+            if (valueB === undefined || valueB === null) return -1 * direction;
+
+            if (key === 'name') {
+                return (valueA as string).localeCompare(valueB as string) * direction;
+            }
+            if (key === 'userId') {
+                const nameA = users.find(u => u.id === valueA)?.name || '';
+                const nameB = users.find(u => u.id === valueB)?.name || '';
+                return nameA.localeCompare(nameB) * direction;
+            }
+             if (typeof valueA === 'number' && typeof valueB === 'number') {
+                return (valueA - valueB) * direction;
+            }
+            return 0;
+        });
+
+        const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
+        const paginated = sorted.slice(startIndex, startIndex + pagination.itemsPerPage);
+
+        return { paginated, totalCount: sorted.length };
+    }, [filteredCustomers, sortConfig, pagination, users]);
+
 
     const handleSaveCustomer = (customerData: Omit<Customer, 'id' | 'userId' | 'createdDate' | 'lastContactDate' | 'interactions'>, existingCustomerId?: string) => {
         if (existingCustomerId) {
@@ -2501,10 +2627,17 @@ const MainLayout: React.FC = () => {
     };
     
     const handleToggleSelectAll = () => {
-        if (selectedCustomerIds.size === filteredCustomers.length) {
-            setSelectedCustomerIds(new Set());
+        const currentIdsOnPage = new Set(processedListViewCustomers.paginated.map(c => c.id));
+        if (processedListViewCustomers.paginated.every(c => selectedCustomerIds.has(c.id))) {
+             // Deselect all on current page
+             setSelectedCustomerIds(prev => {
+                const newSet = new Set(prev);
+                currentIdsOnPage.forEach(id => newSet.delete(id));
+                return newSet;
+            });
         } else {
-            setSelectedCustomerIds(new Set(filteredCustomers.map(c => c.id)));
+            // Select all on current page
+            setSelectedCustomerIds(prev => new Set([...prev, ...currentIdsOnPage]));
         }
     };
 
@@ -2515,6 +2648,13 @@ const MainLayout: React.FC = () => {
         }));
         addNotification(`Đã cập nhật ${selectedCustomerIds.size} khách hàng.`, 'success');
         setSelectedCustomerIds(new Set());
+    };
+    
+    const handleSort = (key: keyof Customer) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'ascending' ? 'descending' : 'ascending'
+        }));
     };
 
 
@@ -2576,7 +2716,7 @@ const MainLayout: React.FC = () => {
             case 'kanban':
                 return <KanbanView {...commonProps} customers={filteredCustomers} statuses={crmData.statuses} reminders={crmData.reminders} onCustomerEdit={openEditCustomer} onCustomerUpdate={handleCustomerUpdate} onDelete={(ids) => setDeleteConfirm({isOpen: true, ids, type: 'customer'})} onAddInteraction={handleAddInteraction} onDeleteInteraction={handleDeleteInteraction} onGenerateScript={handleGenerateScript} onOpenReminderModal={(id) => openReminderModal(id)} users={users} searchTerm={searchTerm} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} />;
             case 'list':
-                return <ListView {...commonProps} customers={filteredCustomers} statuses={crmData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(ids) => setDeleteConfirm({isOpen: true, ids, type: 'customer'})} onGenerateScript={handleGenerateScript} onAddCustomer={openAddCustomer} users={users} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} selectedCustomerIds={selectedCustomerIds} onToggleSelectCustomer={handleToggleSelectCustomer} onToggleSelectAll={handleToggleSelectAll} />;
+                return <ListView {...commonProps} customers={processedListViewCustomers.paginated} totalCustomers={processedListViewCustomers.totalCount} statuses={crmData.statuses} onCustomerEdit={openEditCustomer} onCustomerDelete={(ids) => setDeleteConfirm({isOpen: true, ids, type: 'customer'})} onGenerateScript={handleGenerateScript} onAddCustomer={openAddCustomer} users={users} selectedUserId={selectedUserId} onSelectedUserChange={setSelectedUserId} searchTerm={searchTerm} selectedCustomerIds={selectedCustomerIds} onToggleSelectCustomer={handleToggleSelectCustomer} onToggleSelectAll={handleToggleSelectAll} sortConfig={sortConfig} handleSort={handleSort} pagination={pagination} setPagination={setPagination} />;
             case 'reports':
                 return currentUser.role === 'admin' ? <ReportsView {...commonProps} crmData={crmData} users={users} /> : null;
             case 'settings':
