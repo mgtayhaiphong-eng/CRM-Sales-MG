@@ -37,7 +37,7 @@ export interface Customer {
   createdDate: number;
   lastContactDate: number;
   interactions: Interaction[];
-  userId: string; // ID of the user who created/owns this customer
+  userId?: string; // ID of the user who created/owns this customer
 }
 
 export interface Status {
@@ -67,6 +67,7 @@ export interface Reminder {
   dueDate: number;
   completed: boolean;
   priority: 'high' | 'medium' | 'low';
+  isAuto?: boolean;
 }
 
 export interface SalesGoal {
